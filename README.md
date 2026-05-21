@@ -15,6 +15,7 @@
 |:---:|:---:|---|:---:|
 | **v1.7.0** | 2026-05-21 | 搜索联想 + 回测时间 + WebView + 宏观扩展 + API Key脱敏 | [下载](https://github.com/jangviktor-web/finance_chart/releases/download/v1.7.0/app-release.apk) |
 | **v1.6.0** | 2026-05-21 | AI热点发现 + AI同业对比 + AI深度分析 + 全局限流 + 功能开关 | [下载](https://github.com/jangviktor-web/finance_chart/releases/tag/v1.6.0) |
+| **v1.6.0** | 2026-05-21 | 新增"资金流向"卡片：6 项指标汇总 + 近 5 日主力净流入柱状图 | [下载](https://github.com/jangviktor-web/finance_chart/releases/tag/v1.4.0) |
 
 > 更多版本详见 [Releases](https://github.com/jangviktor-web/finance_chart/releases) · 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)
 
