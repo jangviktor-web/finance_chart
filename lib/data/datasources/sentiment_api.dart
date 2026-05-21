@@ -394,6 +394,43 @@ class SentimentApi {
     return [];
   }
 
+  /// 热门板块 — 按涨跌幅排序，返回板块名/涨跌幅/涨跌家数/领涨股/BK代码
+  Future<List<Map<String, dynamic>>> getHotSectors({int limit = 8}) async {
+    // 先尝试行业板块，失败再尝试概念板块
+    final fsList = ['m:90+t:2+f:!50', 'm:90+t:3+f:!50'];
+
+    for (final fs in fsList) {
+      try {
+        final response = await _push2Retry(ApiEndpoints.sectorFlow, {
+          'pn': '1', 'pz': '$limit', 'po': '1', 'np': '1',
+          'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+          'fltt': '2', 'invt': '2', 'fid': 'f3',
+          'fs': fs,
+          'fields': 'f12,f14,f3,f104,f105,f128,f140',
+        });
+
+        final data = response.data is String ? json.decode(response.data) : response.data;
+        if (data['data'] != null) {
+          final rows = (data['data']['diff'] as List?) ?? [];
+          if (rows.isNotEmpty) {
+            return rows.take(limit).map((item) => {
+              'name': item['f14']?.toString() ?? '',
+              'changePercent': (item['f3'] ?? 0).toDouble(),
+              'upCount': (item['f104'] ?? 0).toInt(),
+              'downCount': (item['f105'] ?? 0).toInt(),
+              'leader': item['f128']?.toString() ?? '',
+              'bkCode': item['f12']?.toString() ?? '',
+            }).toList();
+          }
+        }
+      } catch (e) {
+        AppLog.instance.info('SentimentApi', 'getHotSectors fs=$fs 失败: $e');
+        continue;
+      }
+    }
+    return [];
+  }
+
   /// 根据 f13 字段判断市场前缀（0=深圳, 1=上海）
   String _getMarketPrefix(Map<String, dynamic> item) {
     final market = item['f13'];

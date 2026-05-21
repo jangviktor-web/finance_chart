@@ -16,6 +16,7 @@ import 'fund_flow_screen.dart';
 import 'hotspot_screen.dart';
 import 'comparable_company_screen.dart';
 import '../../data/datasources/search_api.dart';
+import '../../data/datasources/sentiment_api.dart';
 
 /// 大盘指数数据
 class IndexData {
@@ -65,23 +66,13 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   List<SectorData> _sectors = [];
   bool _isLoading = true;
   String? _error;
+  final _sentimentApi = SentimentApi();
 
   static const _indexCodes = [
     ('sh000001', '上证指数'),
     ('sz399001', '深证成指'),
     ('sz399006', '创业板指'),
     ('sh000688', '科创50'),
-  ];
-
-  static const _hotSectors = [
-    ('半导体', '+3.21%', 45, 12, '中芯国际', 'BK1036'),
-    ('新能源', '+2.15%', 38, 18, '宁德时代', 'BK0493'),
-    ('医药生物', '+1.87%', 52, 23, '恒瑞医药', 'BK0485'),
-    ('白酒', '+1.23%', 15, 8, '贵州茅台', 'BK0491'),
-    ('银行', '+0.95%', 30, 5, '招商银行', 'BK0475'),
-    ('房地产', '-1.45%', 8, 35, '万科A', 'BK0451'),
-    ('军工', '-0.88%', 20, 28, '中航沈飞', 'BK0541'),
-    ('人工智能', '+4.56%', 55, 8, '科大讯飞', 'BK0807'),
   ];
 
   @override
@@ -97,36 +88,30 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     });
 
     try {
-      final indices = await _fetchIndices();
+      // 并行加载大盘指数和热门板块
+      final indicesFuture = _fetchIndices();
+      final sectorsFuture = _sentimentApi.getHotSectors(limit: 8);
+
+      final results = await Future.wait([indicesFuture, sectorsFuture]);
+      final indices = results[0] as List<IndexData>;
+      final sectorMaps = results[1] as List<Map<String, dynamic>>;
+
       setState(() {
         _indices = indices;
-        _sectors = _hotSectors
-            .map((s) => SectorData(
-                  name: s.$1,
-                  changePercent: double.parse(s.$2.replaceAll('%', '')),
-                  upCount: s.$3,
-                  downCount: s.$4,
-                  leader: s.$5,
-                  bkCode: s.$6,
-                ))
-            .toList();
+        _sectors = sectorMaps.map((s) => SectorData(
+          name: s['name'] ?? '',
+          changePercent: (s['changePercent'] ?? 0).toDouble(),
+          upCount: (s['upCount'] ?? 0).toInt(),
+          downCount: (s['downCount'] ?? 0).toInt(),
+          leader: s['leader'] ?? '',
+          bkCode: s['bkCode'],
+        )).toList();
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
         _error = e.toString();
         _isLoading = false;
-        // 使用默认数据
-        _sectors = _hotSectors
-            .map((s) => SectorData(
-                  name: s.$1,
-                  changePercent: double.parse(s.$2.replaceAll('%', '')),
-                  upCount: s.$3,
-                  downCount: s.$4,
-                  leader: s.$5,
-                  bkCode: s.$6,
-                ))
-            .toList();
       });
     }
   }
