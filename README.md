@@ -11,6 +11,17 @@
 
 ---
 
+## 应用截图
+
+<p align="center">
+  <img src="screenshots/app-screenshot-1.jpg" alt="策盈 QuantWin 行情与技术分析" width="100%">
+</p>
+<p align="center">
+  <img src="screenshots/app-screenshot-2.jpg" alt="策盈 QuantWin 策略回测与发现" width="100%">
+</p>
+
+---
+
 ## 下载
 
 | 版本 | 日期 | 更新内容 | APK |
