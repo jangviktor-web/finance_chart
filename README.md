@@ -15,6 +15,7 @@
 
 | 版本 | 日期 | 更新内容 | APK |
 |:---:|:---:|---|:---:|
+| **v1.7.1** | 2026-05-22 | 全API频率限制 · 每日调用上限 · 宏观数据缓存 · 修复FundFlow域名 | [下载](https://github.com/jangviktor-web/finance_chart/releases/download/v1.7.1/app-release.apk) |
 | **v1.7.0** | 2026-05-21 | 搜索联想 · 回测时间区间 · WebView · 宏观扩展 · API Key 脱敏 | [下载](https://github.com/jangviktor-web/finance_chart/releases/download/v1.7.0/app-release.apk) |
 | **v1.6.0** | 2026-05-21 | AI 热点 · AI 同业对比 · AI 深度分析 · 全局限流 · 功能开关 | [下载](https://github.com/jangviktor-web/finance_chart/releases/tag/v1.6.0) |
 | **v1.4.0** | 2026-05-20 | 资金流向 · 北向深度 · 龙虎榜扩展 | [下载](https://github.com/jangviktor-web/finance_chart/releases/tag/v1.4.0) |
