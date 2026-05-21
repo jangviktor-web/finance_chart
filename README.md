@@ -1,17 +1,102 @@
-# finance_chart
+# 策盈 QuantWin
 
-A new Flutter project.
+A 股量化分析工具箱 — 纯 Flutter 客户端，无需后端服务，数据全部来自公开免费 API。
 
-## Getting Started
+## 功能一览
 
-This project is a starting point for a Flutter application.
+### 行情数据
+- **多数据源实时行情**：腾讯、东方财富、百度，自动降级切换
+- **多数据源 K 线**：腾讯、新浪、百度，并行竞速返回最快结果
+- **分时/K 线图表**：日线、周线、月线、1/5/15/30/60 分钟线
+- **暗色/亮色主题**：中国红涨绿跌 / 美国绿涨红跌 可切换
 
-A few resources to get you started if this is your first Flutter project:
+### 技术分析（25+ 指标）
+- **基础指标**：MA、MACD、KDJ、RSI、BOLL、VOL
+- **扩展指标**：OBV、CCI、WR、DMI、TRIX、PSY、ROC、MFI、VR、EMV、MASS、CR、BRAR、ASI、ATR、BIAS、DPO、DFMA
+- **K 线形态识别**：锤子线、十字星、吞没、启明星等
+- **参数可调**：MA 周期、MACD/KDJ/RSI/BOLL 参数全部可自定义
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### AI 智能（东方财富妙想）
+- **AI 诊断**：个股技术面 + 基本面综合诊断，风险等级 + 操作建议
+- **AI 选股**：自然语言描述条件，AI 匹配推荐
+- **AI 对话**：聊天气泡界面，支持快捷操作芯片
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### 资金流向
+- **个股资金流**：主力/超大单/大单/中单/小单 净流入历史
+- **大盘资金流**：上证 + 深证 实时资金流快照
+- **全市场排行**：按今日/3日/5日/10日主力净流入排序
+
+### 北向资金
+- **实时分时**：沪股通 + 深股通 分钟级净买入
+- **历史趋势**：近 30 天每日净买入柱状图
+- **板块排名**：北向资金持股板块排名
+- **个股持仓**：单只股票北向持仓历史 + 机构明细
+
+### 龙虎榜
+- **每日详情**：上榜个股 + 买入/卖出营业部
+- **上榜统计**：近 1/3/6/12 月上榜次数排名
+- **机构追踪**：机构席位买卖每日统计
+- **营业部排行**：按资金实力 / 收益率排名
+
+### 选股扫描
+- **全市场扫描**：覆盖沪深京 A 股
+- **5 大策略**：MA 均线交叉、KDJ 金叉、RSI 超卖反弹、MACD 金叉、放量突破
+- **过滤条件**：可过滤 ST、科创板、创业板
+- **批量操作**：一键加自选、CSV 导出
+
+### 其他功能
+- **自选分组**：多分组管理，股票跨组移动
+- **新闻资讯**：东财 7x24、财联社、新浪财经三源
+- **宏观数据**：CPI、PPI、GDP、PMI、M2、LPR
+- **板块资金流**：行业板块资金流向排行
+- **涨停/跌停池**：实时涨跌停股票列表
+- **融资融券**：两融余额趋势
+- **股东人数**：最新股东变化
+- **大宗交易**：每日大宗交易明细
+- **限售解禁**：近期解禁日历
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 框架 | Flutter 3.x + Dart |
+| 状态管理 | Riverpod (StateNotifierProvider) |
+| 网络 | Dio + dart:io HttpClient |
+| 图表 | CustomPainter 自绘 |
+| 存储 | SharedPreferences |
+| 编码 | fast_gbk (腾讯 GBK 解码) |
+| UUID | uuid (AI 请求标识) |
+
+## 数据源
+
+| 数据源 | 域名 | 用途 |
+|--------|------|------|
+| 东方财富 Push2 | push2.eastmoney.com | 实时行情、板块资金流 |
+| 东方财富 Push2His | push2his.eastmoney.com | 个股资金流历史 |
+| 东方财富 DataCenter | datacenter-web.eastmoney.com | 龙虎榜、北向、融资融券、宏观 |
+| 东方财富 AI | ai-saas.eastmoney.com | AI 诊断/选股 |
+| 腾讯行情 | qt.gtimg.cn | 实时行情 (GBK) |
+| 腾讯 K 线 | ifzq.gtimg.cn | K 线数据 |
+| 新浪财经 | money.finance.sina.com.cn | K 线数据 |
+| 百度财经 | finance.pae.baidu.com | 实时行情、K 线、概念板块 |
+| 财联社 | cls.cn | 新闻资讯 |
+| 东财新闻 | np-listapi.eastmoney.com | 7x24 新闻 |
+| 东财搜索 | searchapi.eastmoney.com | 股票搜索 |
+
+所有数据源均支持自动降级，单一数据源故障不影响整体使用。
+
+## 构建
+
+```bash
+flutter build apk --release
+```
+
+输出：`build/app/outputs/flutter-apk/app-release.apk`
+
+## 版本历史
+
+详见 [CHANGELOG.md](CHANGELOG.md)
+
+## 免责声明
+
+本应用仅供学习交流，所有数据来自公开 API，不构成任何投资建议。股市有风险，投资需谨慎。
