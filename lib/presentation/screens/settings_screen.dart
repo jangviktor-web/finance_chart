@@ -23,6 +23,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _connectionStatus = '未连接';
   Color _connectionColor = AppColors.textSecondary;
   bool _showAdvanced = false;
+  bool _showApiKey = false;
 
   @override
   void dispose() {
@@ -794,6 +795,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  String _maskKey(String key) {
+    if (key.length <= 12) return key;
+    return '${key.substring(0, 6)}***${key.substring(key.length - 6)}';
+  }
+
   Widget _buildApiKeyInput(String currentKey) {
     final controller = TextEditingController(text: currentKey);
     return Padding(
@@ -803,6 +809,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           Text('东方财富妙想 API Key', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
           const SizedBox(height: 8),
+          // 脱敏显示
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _showApiKey ? currentKey : _maskKey(currentKey),
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'monospace'),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => _showApiKey = !_showApiKey),
+                  child: Icon(
+                    _showApiKey ? Icons.visibility_off : Icons.visibility,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 输入框 + 保存
           Row(
             children: [
               Expanded(
@@ -810,7 +845,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   controller: controller,
                   style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: '输入 API Key',
+                    hintText: '输入新的 API Key',
                     hintStyle: TextStyle(color: AppColors.textSecondary),
                     filled: true,
                     fillColor: AppColors.cardBackground,

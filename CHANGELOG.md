@@ -4,6 +4,56 @@
 
 ---
 
+## v1.7.0 (2026-05-21)
+
+**搜索联想 + 回测时间选择 + 内嵌浏览器 + 宏观数据扩展 + API Key 脱敏**
+
+### 新增功能
+
+**同业对比搜索联想**
+- 输入中文关键词实时联想上市公司（如"中国"→ 中国银行、中国人寿等）
+- 输入数字自动匹配 6 位股票代码前缀（如"05"→ 05 开头的代码）
+- 500ms 防抖，下拉最多 5 条，点击自动填充并触发分析
+- 数据源：东方财富搜索 API（`searchapi.eastmoney.com`）
+
+**回测自定义时间区间**
+- 快捷按钮：近1月/近3月/近6月/近1年/近2年
+- 自定义 DatePicker 选择任意起止日期
+- K 线按日期范围过滤后传入回测引擎
+- 回测结果（收益率、回撤、夏普等）限定在选定时间段内计算
+
+**新闻内嵌 WebView**
+- 新闻搜索结果点击后在 APP 内用 WebView 加载，不再跳转外部浏览器
+- 页面顶部保留返回按钮，可切回新闻列表
+- 自动获取网页标题显示在 AppBar
+- 新增 `webview_flutter` 依赖
+
+**宏观数据扩展（+8 项）**
+- 高频跟踪：高炉开工率、30城商品房成交面积、动力电池装机量、工业机器人产量增速
+- 政策利率：社会融资规模、MLF 操作利率
+- 资产联动：美元/人民币汇率、10年期国债收益率
+- 分 4 组展示：基础指标 / 高频跟踪 / 政策利率 / 资产联动
+- 每组带竖线标题分隔
+
+**API Key 脱敏显示**
+- 设置页 API Key 默认显示脱敏格式（前6位 + `***` + 后6位）
+- 新增眼睛图标切换完整明文/脱敏显示
+- 输入框和保存功能不受影响
+
+### 新增文件
+- `lib/presentation/screens/webview_screen.dart` — APP 内 WebView 页面
+
+### 修改文件
+- `lib/presentation/screens/comparable_company_screen.dart` — 搜索联想 + 防抖
+- `lib/presentation/screens/strategy_screen.dart` — 时间区间选择 + 日期过滤
+- `lib/presentation/screens/news_screen.dart` — WebView 替代外部浏览器
+- `lib/data/datasources/macro_api.dart` — 新增 8 个宏观数据 API 方法
+- `lib/presentation/screens/macro_screen.dart` — 分组展示 + 新指标卡片
+- `lib/presentation/screens/settings_screen.dart` — API Key 脱敏 + 显示切换
+- `pubspec.yaml` — 新增 webview_flutter 依赖
+
+---
+
 ## v1.6.0 (2026-05-21)
 
 **AI 功能扩展 + 全局限流 + 功能开关**

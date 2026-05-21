@@ -43,6 +43,10 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
   Timer? _debounceTimer;
   bool _showSuggestions = false;
 
+  // 时间区间
+  DateTime _startDate = DateTime.now().subtract(const Duration(days: 365));
+  DateTime _endDate = DateTime.now();
+
   static const _strategies = [
     ('buy_hold', '买入持有', '第1天买入持有到最后一天，基准策略'),
     ('ma_cross', '均线交叉', 'MA5 上穿 MA20 买入，下穿卖出'),
@@ -107,18 +111,29 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
     }
     _codeController.text = code;
 
+    // 根据日期范围计算需要获取的K线数量（+60根预热）
+    final dayCount = _endDate.difference(_startDate).inDays + 60;
+    final fetchCount = (dayCount * 250 / 365).ceil().clamp(120, 1000);
+
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
         setState(() => _loadingStatus = '正在获取回测数据... (第$attempt次尝试)');
 
         final repo = ref.read(marketRepositoryProvider);
         final results = await Future.wait([
-          repo.getKline(code: code, period: 'day', count: 250),
-          repo.getKline(code: 'sh000001', period: 'day', count: 250),
+          repo.getKline(code: code, period: 'day', count: fetchCount),
+          repo.getKline(code: 'sh000001', period: 'day', count: fetchCount),
         ]);
 
-        final klines = results[0];
-        final benchmarkKlines = results[1];
+        // 按日期范围过滤（保留预热期60根 + 回测区间）
+        final allKlines = results[0];
+        final allBenchmark = results[1];
+        final klines = allKlines.where((k) =>
+            k.time.isAfter(_startDate.subtract(const Duration(days: 1))) &&
+            k.time.isBefore(_endDate.add(const Duration(days: 1)))).toList();
+        final benchmarkKlines = allBenchmark.where((k) =>
+            k.time.isAfter(_startDate.subtract(const Duration(days: 1))) &&
+            k.time.isBefore(_endDate.add(const Duration(days: 1)))).toList();
 
         if (klines.length < 60) throw Exception('数据不足，需要至少60根K线');
 
@@ -178,15 +193,24 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
       return;
     }
 
+    final dayCount = _endDate.difference(_startDate).inDays + 60;
+    final fetchCount = (dayCount * 250 / 365).ceil().clamp(120, 1000);
+
     try {
       final repo = ref.read(marketRepositoryProvider);
       final results = await Future.wait([
-        repo.getKline(code: code, period: 'day', count: 250),
-        repo.getKline(code: 'sh000001', period: 'day', count: 250),
+        repo.getKline(code: code, period: 'day', count: fetchCount),
+        repo.getKline(code: 'sh000001', period: 'day', count: fetchCount),
       ]);
 
-      final klines = results[0];
-      final benchmarkKlines = results[1];
+      final allKlines = results[0];
+      final allBenchmark = results[1];
+      final klines = allKlines.where((k) =>
+          k.time.isAfter(_startDate.subtract(const Duration(days: 1))) &&
+          k.time.isBefore(_endDate.add(const Duration(days: 1)))).toList();
+      final benchmarkKlines = allBenchmark.where((k) =>
+          k.time.isAfter(_startDate.subtract(const Duration(days: 1))) &&
+          k.time.isBefore(_endDate.add(const Duration(days: 1)))).toList();
 
       if (klines.length < 60) throw Exception('数据不足');
 
@@ -236,6 +260,8 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
           _buildInputSection(),
           const SizedBox(height: 16),
           _buildStrategySelector(),
+          const SizedBox(height: 12),
+          _buildDateRangeSelector(),
           const SizedBox(height: 12),
           _buildParamsToggle(),
           const SizedBox(height: 12),
@@ -377,6 +403,119 @@ class _StrategyScreenState extends ConsumerState<StrategyScreen> {
             );
           }),
         ],
+      ),
+    );
+  }
+
+  // ── 时间区间选择 ──
+
+  void _setQuickRange(int months) {
+    setState(() {
+      _endDate = DateTime.now();
+      _startDate = DateTime.now().subtract(Duration(days: months * 30));
+    });
+  }
+
+  String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Widget _buildDateRangeSelector() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.date_range, color: AppColors.primary, size: 18),
+              const SizedBox(width: 8),
+              Text('回测时间区间', style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 快捷按钮
+          Wrap(
+            spacing: 8,
+            children: [
+              _buildQuickChip('近1月', 1),
+              _buildQuickChip('近3月', 3),
+              _buildQuickChip('近6月', 6),
+              _buildQuickChip('近1年', 12),
+              _buildQuickChip('近2年', 24),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 自定义日期
+          Row(
+            children: [
+              Expanded(
+                child: _buildDateButton(
+                  label: _fmtDate(_startDate),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _startDate,
+                      firstDate: DateTime(2010),
+                      lastDate: _endDate.subtract(const Duration(days: 30)),
+                    );
+                    if (picked != null) setState(() => _startDate = picked);
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text('至', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              ),
+              Expanded(
+                child: _buildDateButton(
+                  label: _fmtDate(_endDate),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _endDate,
+                      firstDate: _startDate.add(const Duration(days: 30)),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setState(() => _endDate = picked);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickChip(String label, int months) {
+    return ActionChip(
+      label: Text(label, style: TextStyle(color: AppColors.primary, fontSize: 12)),
+      backgroundColor: AppColors.primary.withOpacity(0.1),
+      side: BorderSide.none,
+      onPressed: () => _setQuickRange(months),
+    );
+  }
+
+  Widget _buildDateButton({required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.calendar_today, size: 14, color: AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }

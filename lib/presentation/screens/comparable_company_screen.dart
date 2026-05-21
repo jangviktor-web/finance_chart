@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -6,6 +7,7 @@ import '../../core/utils/app_logger.dart';
 import '../../data/models/ai_report.dart';
 import '../../data/datasources/em_ai_api.dart';
 import '../../data/datasources/local/ai_history_storage.dart';
+import '../../data/datasources/search_api.dart';
 import '../providers/settings_provider.dart';
 
 /// 可比公司分析页面
@@ -20,10 +22,16 @@ class _ComparableCompanyScreenState extends ConsumerState<ComparableCompanyScree
     with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   final _storage = AiHistoryStorage();
+  final _searchApi = SearchApi();
   ComparableCompanyData? _data;
   bool _loading = false;
   String? _error;
   late TabController _tabController;
+
+  // 搜索联想
+  Timer? _debounceTimer;
+  List<SearchResult> _suggestions = [];
+  bool _showSuggestions = false;
 
   @override
   void initState() {
@@ -33,9 +41,42 @@ class _ComparableCompanyScreenState extends ConsumerState<ComparableCompanyScree
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    _debounceTimer?.cancel();
+    if (query.trim().length < 2) {
+      setState(() {
+        _suggestions.clear();
+        _showSuggestions = false;
+      });
+      return;
+    }
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final results = await _searchApi.search(query.trim());
+        if (mounted) {
+          setState(() {
+            _suggestions = results.take(5).toList();
+            _showSuggestions = _suggestions.isNotEmpty;
+          });
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _selectSuggestion(SearchResult result) {
+    _debounceTimer?.cancel();
+    setState(() {
+      _searchController.text = result.name;
+      _suggestions.clear();
+      _showSuggestions = false;
+    });
+    _search();
   }
 
   EmAiApi _getApi() {
@@ -204,40 +245,50 @@ class _ComparableCompanyScreenState extends ConsumerState<ComparableCompanyScree
           // 搜索栏
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: AppColors.textPrimary),
-                    decoration: InputDecoration(
-                      hintText: '输入公司名称，如"贵州茅台"',
-                      hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                      prefixIcon: Icon(Icons.business, color: AppColors.textSecondary),
-                      filled: true,
-                      fillColor: AppColors.cardBackground,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        style: TextStyle(color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: '输入公司名或股票代码',
+                          hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                          prefixIcon: Icon(Icons.business, color: AppColors.textSecondary),
+                          filled: true,
+                          fillColor: AppColors.cardBackground,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        onChanged: _onSearchChanged,
+                        onSubmitted: (_) {
+                          setState(() { _showSuggestions = false; });
+                          _search();
+                        },
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
-                    onSubmitted: (_) => _search(),
-                  ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _loading ? null : _search,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      ),
+                      child: _loading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('分析'),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _loading ? null : _search,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  ),
-                  child: _loading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('分析'),
-                ),
+                // 联想下拉列表
+                if (_showSuggestions) _buildSuggestionsList(),
               ],
             ),
           ),
@@ -279,6 +330,40 @@ class _ComparableCompanyScreenState extends ConsumerState<ComparableCompanyScree
                         : _buildResult(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsList() {
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      constraints: const BoxConstraints(maxHeight: 200),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider, width: 0.5),
+      ),
+      child: ListView.builder(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        itemCount: _suggestions.length,
+        itemBuilder: (ctx, i) {
+          final s = _suggestions[i];
+          return InkWell(
+            onTap: () => _selectSuggestion(s),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(s.name, style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                  ),
+                  Text(s.code, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

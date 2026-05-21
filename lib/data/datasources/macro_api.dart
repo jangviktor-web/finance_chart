@@ -212,6 +212,134 @@ class MacroApi {
     }
   }
 
+  // ── 高频经济跟踪 ──
+
+  /// 高炉开工率
+  Future<MacroIndicator> getBlastFurnace({int limit = 24}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_HIGH_FURNACE',
+      columns: 'REPORT_DATE,OPERATING_RATE',
+      name: '高炉开工率',
+      unit: '%',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['OPERATING_RATE']),
+      ),
+    );
+  }
+
+  /// 30城商品房成交面积
+  Future<MacroIndicator> getHousing({int limit = 24}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_HOUSING_SALES',
+      columns: 'REPORT_DATE,AREA_30CITY',
+      name: '30城商品房成交',
+      unit: '万㎡',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['AREA_30CITY']),
+      ),
+    );
+  }
+
+  /// 动力电池装机量
+  Future<MacroIndicator> getBattery({int limit = 24}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_BATTERY_INSTALL',
+      columns: 'REPORT_DATE,INSTALL_CAPACITY,YOY',
+      name: '动力电池装机',
+      unit: 'GWh',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['INSTALL_CAPACITY']),
+        yoy: _toDouble(item['YOY']),
+      ),
+    );
+  }
+
+  /// 工业机器人产量增速
+  Future<MacroIndicator> getRobot({int limit = 24}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_ROBOT_OUTPUT',
+      columns: 'REPORT_DATE,OUTPUT_YOY',
+      name: '机器人产量增速',
+      unit: '%',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['OUTPUT_YOY']),
+      ),
+    );
+  }
+
+  // ── 政策利率 ──
+
+  /// 社融规模
+  Future<MacroIndicator> getSocialFinance({int limit = 12}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_SOCIAL_FINANCE',
+      columns: 'REPORT_DATE,TOTAL_AMOUNT,YOY',
+      name: '社融规模',
+      unit: '万亿',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['TOTAL_AMOUNT']),
+        yoy: _toDouble(item['YOY']),
+      ),
+    );
+  }
+
+  /// MLF 操作利率
+  Future<MacroIndicator> getMlf({int limit = 12}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_MLF_RATE',
+      columns: 'REPORT_DATE,RATE,AMOUNT',
+      name: 'MLF利率',
+      unit: '%',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['RATE']),
+      ),
+    );
+  }
+
+  // ── 资产联动 ──
+
+  /// 美元兑人民币汇率
+  Future<MacroIndicator> getUsdCny({int limit = 30}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_CNY_RATE',
+      columns: 'REPORT_DATE,BUY_PRICE',
+      name: '美元/人民币',
+      unit: '',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['BUY_PRICE']),
+      ),
+    );
+  }
+
+  /// 10年期国债收益率
+  Future<MacroIndicator> getBond10y({int limit = 30}) async {
+    return _fetchMacro(
+      reportName: 'RPT_ECONOMY_BOND_YIELD',
+      columns: 'REPORT_DATE,BOND_10Y',
+      name: '10Y国债收益率',
+      unit: '%',
+      limit: limit,
+      parse: (item) => MacroDataPoint(
+        period: _formatPeriod(item['REPORT_DATE']),
+        value: _toDouble(item['BOND_10Y']),
+      ),
+    );
+  }
+
   String _formatPeriod(dynamic dateStr) {
     if (dateStr == null) return '';
     final s = dateStr.toString();
