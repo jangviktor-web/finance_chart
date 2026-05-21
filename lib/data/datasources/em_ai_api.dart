@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 import '../models/ai_data.dart';
+import '../models/ai_report.dart';
 import '../../core/utils/app_logger.dart';
 
 /// 东方财富妙想 API 客户端（直连模式）
@@ -9,6 +10,7 @@ import '../../core/utils/app_logger.dart';
 class EmAiApi {
   static const _searchDataUrl = 'https://ai-saas.eastmoney.com/proxy/b/mcp/tool/searchData';
   static const _stockPickUrl = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/stock-screen';
+  static const _assistantBaseUrl = 'https://ai-saas.eastmoney.com/proxy/app-robo-advisor-api/assistant';
 
   final Dio _dio;
   String _apiKey;
@@ -327,5 +329,125 @@ class EmAiApi {
       return double.tryParse(v) ?? 0;
     }
     return 0;
+  }
+
+  // ──────────── Assistant API（热点/可比公司/深度分析）────────────
+
+  /// 通用 assistant API 调用
+  Future<Map<String, dynamic>> _callAssistant(String endpoint, String question) async {
+    if (_apiKey.isEmpty) return {'error': 'API Key 未配置'};
+
+    try {
+      final response = await _dio.post(
+        '$_assistantBaseUrl/$endpoint',
+        data: {'question': question},
+        options: Options(headers: {'em_api_key': _apiKey}),
+      );
+      final data = response.data is String ? json.decode(response.data) : response.data;
+      return data as Map<String, dynamic>;
+    } catch (e) {
+      AppLog.instance.error('EmAiApi', '$endpoint 失败: $e');
+      return {'error': e.toString()};
+    }
+  }
+
+  /// 市场热点发现 — 返回 Markdown 报告
+  Future<String> getHotspot({String question = '今日热点'}) async {
+    AppLog.instance.info('EmAiApi', 'getHotspot: $question');
+    final data = await _callAssistant('hotspot-discovery', question);
+    if (data.containsKey('error')) {
+      AppLog.instance.error('EmAiApi', 'getHotspot 失败: ${data['error']}');
+      return '查询失败: ${data['error']}';
+    }
+
+    final innerData = data['data'];
+    if (innerData is Map<String, dynamic> && innerData.containsKey('displayData')) {
+      final md = innerData['displayData'] as String;
+      AppLog.instance.info('EmAiApi', 'getHotspot 成功, 长度=${md.length}');
+      return md;
+    }
+    AppLog.instance.warn('EmAiApi', 'getHotspot 无 displayData');
+    return '暂无热点数据';
+  }
+
+  /// 可比公司分析 — 返回结构化数据
+  Future<ComparableCompanyData> getComparableCompany(String companyName) async {
+    AppLog.instance.info('EmAiApi', 'getComparableCompany: $companyName');
+    final data = await _callAssistant('comparable-company-analysis', companyName);
+    if (data.containsKey('error')) {
+      AppLog.instance.error('EmAiApi', 'getComparableCompany 失败: ${data['error']}');
+
+      return ComparableCompanyData(
+        targetCompany: companyName,
+        companies: [],
+        financeHeaders: [],
+        financeData: [],
+        valuationHeaders: [],
+        valuationData: [],
+      );
+    }
+
+    final dataList = data['data'] as List? ?? [];
+    if (dataList.length < 3) {
+      return ComparableCompanyData(
+        targetCompany: companyName,
+        companies: [],
+        financeHeaders: [],
+        financeData: [],
+        valuationHeaders: [],
+        valuationData: [],
+      );
+    }
+
+    // data[1] = 经营指标表, data[2] = 估值指标表
+    final financeTable = dataList[1]['table'] as Map<String, dynamic>? ?? {};
+    final valuationTable = dataList[2]['table'] as Map<String, dynamic>? ?? {};
+
+    // 提取公司名列表（排除统计行）
+    final statKeys = {'最大值', '中位数', '最小值', 'VS中位数(%,目标公司)', 'Z-Score(目标公司)'};
+    final financeCompanies = financeTable.keys
+        .where((k) => k != 'headName' && !statKeys.contains(k))
+        .toList();
+
+    // 提取经营指标
+    final financeHeaders = (financeTable['headName'] as List?)?.cast<String>() ?? [];
+    final financeData = financeCompanies.map((company) {
+      return (financeTable[company] as List?)?.cast<String>() ?? <String>[];
+    }).toList();
+
+    // 提取估值指标
+    final valuationHeaders = (valuationTable['headName'] as List?)?.cast<String>() ?? [];
+    final valuationData = financeCompanies.map((company) {
+      return (valuationTable[company] as List?)?.cast<String>() ?? <String>[];
+    }).toList();
+
+    AppLog.instance.info('EmAiApi', 'getComparableCompany 成功: ${financeCompanies.length}家公司');
+    return ComparableCompanyData(
+      targetCompany: companyName,
+      companies: financeCompanies,
+      financeHeaders: financeHeaders,
+      financeData: financeData,
+      valuationHeaders: valuationHeaders,
+      valuationData: valuationData,
+    );
+  }
+
+  /// 股票深度分析 — 返回 Markdown 报告
+  Future<String> getStockAnalysis(String question) async {
+    AppLog.instance.info('EmAiApi', 'getStockAnalysis: $question');
+    final data = await _callAssistant('stock-analysis', question);
+    if (data.containsKey('error')) {
+      AppLog.instance.error('EmAiApi', 'getStockAnalysis 失败: ${data['error']}');
+      return '查询失败: ${data['error']}';
+    }
+
+    final innerData = data['data'];
+    if (innerData is Map<String, dynamic> && innerData.containsKey('displayData')) {
+      final md = innerData['displayData'] as String;
+      AppLog.instance.info('EmAiApi', 'getStockAnalysis 成功, 长度=${md.length}');
+      return md;
+    }
+    AppLog.instance.warn('EmAiApi', 'getStockAnalysis 无 displayData');
+    return '暂无分析数据';
   }
 }

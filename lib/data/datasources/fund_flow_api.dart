@@ -3,12 +3,12 @@ import 'package:dio/dio.dart';
 import '../models/sentiment_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/rate_limiter.dart';
 import '../../core/utils/stock_code_utils.dart';
 
 /// 资金流向 API — 个股/大盘/排行
 class FundFlowApi {
   final Dio _dio;
-  DateTime? _lastRequest;
 
   FundFlowApi({Dio? dio})
       : _dio = dio ?? Dio(BaseOptions(
@@ -20,21 +20,10 @@ class FundFlowApi {
           },
         ));
 
-  /// 频率控制
-  Future<void> _throttle() async {
-    if (_lastRequest != null) {
-      final elapsed = DateTime.now().difference(_lastRequest!);
-      if (elapsed < const Duration(milliseconds: 800)) {
-        await Future.delayed(const Duration(milliseconds: 800) - elapsed);
-      }
-    }
-    _lastRequest = DateTime.now();
-  }
-
   /// 个股资金流向历史（日线）
   /// 返回最近 [days] 天的主力/大单/中单/小单/超大单净流入
   Future<List<FundFlowDetail>> getStockFundFlow(String code, {int days = 30}) async {
-    await _throttle();
+    await RateLimiter.instance.wait('push2his.eastmoney.com');
 
     final secid = StockCodeUtils.toSecId(code);
     final params = {
@@ -82,7 +71,7 @@ class FundFlowApi {
 
   /// 大盘实时资金流快照（上证+深证）
   Future<MarketFundFlow> getMarketFundFlow() async {
-    await _throttle();
+    await RateLimiter.instance.wait('push2his.eastmoney.com');
 
     final params = {
       'fltt': '2',
@@ -129,7 +118,7 @@ class FundFlowApi {
     String period = 'today',
     int limit = 50,
   }) async {
-    await _throttle();
+    await RateLimiter.instance.wait('push2his.eastmoney.com');
 
     final indicatorMap = {
       'today': {'fid': 'f62', 'fields': 'f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87'},

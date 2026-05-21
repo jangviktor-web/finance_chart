@@ -3,13 +3,11 @@ import 'package:dio/dio.dart';
 import '../models/sentiment_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/rate_limiter.dart';
 
 /// 市场情绪 API — 多数据源降级
 class SentimentApi {
   final Dio _dio;
-
-  /// 上次请求时间戳，用于频率控制
-  DateTime? _lastPush2Request;
 
   SentimentApi({Dio? dio})
       : _dio = dio ?? Dio(BaseOptions(
@@ -25,13 +23,8 @@ class SentimentApi {
   /// 带重试 + 域名降级的 push 请求
   /// 主域名 push2 → 备用域名 push3，每个域名最多重试 maxRetries 次
   Future<Response> _push2Retry(String url, Map<String, dynamic> params, {int maxRetries = 2}) async {
-    // 频率控制：两次请求间隔至少 1.5 秒
-    if (_lastPush2Request != null) {
-      final elapsed = DateTime.now().difference(_lastPush2Request!);
-      if (elapsed < const Duration(milliseconds: 1500)) {
-        await Future.delayed(const Duration(milliseconds: 1500) - elapsed);
-      }
-    }
+    // 全局频率控制
+    await RateLimiter.instance.waitByUrl(url);
 
     // 构建域名列表：push2 → push3
     final fallbackUrl = url.replaceFirst('push2.eastmoney.com', 'push3.eastmoney.com');
@@ -41,11 +34,12 @@ class SentimentApi {
       for (int i = 0; i < maxRetries; i++) {
         try {
           final response = await _dio.get(hostUrl, queryParameters: params);
-          _lastPush2Request = DateTime.now();
+          RateLimiter.instance.recordSuccess(_extractDomain(hostUrl));
           return response;
         } catch (e) {
-          final host = hostUrl.contains('push3') ? 'push3' : 'push2';
-          AppLog.instance.warn('SentimentApi', '$host 请求第${i + 1}次失败: $e');
+          final domain = _extractDomain(hostUrl);
+          RateLimiter.instance.recordFailure(domain);
+          AppLog.instance.warn('SentimentApi', '$domain 请求第${i + 1}次失败: $e');
           if (i < maxRetries - 1) {
             await Future.delayed(Duration(seconds: 1 << i));
           }
@@ -53,6 +47,10 @@ class SentimentApi {
       }
     }
     throw Exception('push2/push3 所有请求均失败');
+  }
+
+  String _extractDomain(String url) {
+    try { return Uri.parse(url).host; } catch (_) { return 'unknown'; }
   }
 
   /// 涨停池 — 通过 push2 clist API 筛选涨幅>=9.8%的股票
@@ -171,6 +169,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
       final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -215,6 +214,7 @@ class SentimentApi {
 
     for (final params in paramSets) {
       try {
+        await RateLimiter.instance.waitByUrl(ApiEndpoints.northbound);
         final response = await _dio.get(ApiEndpoints.northbound, queryParameters: params);
         final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -269,6 +269,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.northboundHistory);
       final response = await _dio.get(ApiEndpoints.northboundHistory, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -326,6 +327,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.margin);
       final response = await _dio.get(ApiEndpoints.margin, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -417,6 +419,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.northboundHistory);
       final response = await _dio.get(ApiEndpoints.northboundHistory, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -453,6 +456,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.northboundHistory);
       final response = await _dio.get(ApiEndpoints.northboundHistory, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -495,6 +499,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
       final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -539,6 +544,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
       final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
@@ -579,6 +585,7 @@ class SentimentApi {
     };
 
     try {
+      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
       final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 

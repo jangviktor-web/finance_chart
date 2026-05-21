@@ -10,6 +10,8 @@ import '../models/data_source_config.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/errors/api_exception.dart';
 import '../../core/utils/stock_code_utils.dart';
+import '../../core/utils/rate_limiter.dart';
+import 'local/cache_manager.dart';
 import 'baidu_api.dart';
 
 /// 行情数据 API — 多数据源支持
@@ -42,26 +44,36 @@ class MarketApi {
 
   // ──────────── 实时行情 ────────────
 
-  /// 获取实时行情 — 根据配置选择数据源
+  /// 获取实时行情 — 根据配置选择数据源（带缓存+限流）
   Future<RealtimeQuote> getRealtime(String code) async {
-    if (realtimeSource == DataSourceType.tencent) {
-      return await _getRealtimeFromTencentRaw(code);
-    } else if (realtimeSource == DataSourceType.eastmoney) {
-      return await _getRealtimeFromEastmoney(code);
-    } else if (realtimeSource == DataSourceType.baidu) {
-      return await _baiduApi.getRealtime(code);
-    } else {
-      // auto 模式：腾讯 → 东方财富 → 百度
-      try {
+    final cacheKey = 'realtime_$code';
+    final cached = CacheManager.instance.get<RealtimeQuote>(cacheKey);
+    if (cached != null) return cached;
+
+    Future<RealtimeQuote> _fetch() async {
+      if (realtimeSource == DataSourceType.tencent) {
         return await _getRealtimeFromTencentRaw(code);
-      } catch (e) {
+      } else if (realtimeSource == DataSourceType.eastmoney) {
+        return await _getRealtimeFromEastmoney(code);
+      } else if (realtimeSource == DataSourceType.baidu) {
+        return await _baiduApi.getRealtime(code);
+      } else {
+        // auto 模式：腾讯 → 东方财富 → 百度
         try {
-          return await _getRealtimeFromEastmoney(code);
-        } catch (e2) {
-          return await _baiduApi.getRealtime(code);
+          return await _getRealtimeFromTencentRaw(code);
+        } catch (e) {
+          try {
+            return await _getRealtimeFromEastmoney(code);
+          } catch (e2) {
+            return await _baiduApi.getRealtime(code);
+          }
         }
       }
     }
+
+    final result = await _fetch();
+    CacheManager.instance.set(cacheKey, result, CacheManager.ttlRealtime);
+    return result;
   }
 
   /// 东方财富实时行情 — 用 raw HttpClient 绕开 Dio 编码干扰
@@ -71,6 +83,7 @@ class MarketApi {
         '&fields=f2,f3,f4,f5,f6,f12,f14,f15,f16,f17,f18';
 
     final uri = Uri.parse(url);
+    await RateLimiter.instance.waitByUrl(url);
     final client = HttpClient();
     try {
       client.connectionTimeout = const Duration(seconds: 10);
@@ -118,6 +131,7 @@ class MarketApi {
     final url = '${ApiEndpoints.tencentRealtime}$formatted';
 
     final uri = Uri.parse(url);
+    await RateLimiter.instance.waitByUrl(url);
     final client = HttpClient();
     try {
       client.connectionTimeout = const Duration(seconds: 10);
@@ -156,34 +170,49 @@ class MarketApi {
 
   // ──────────── 历史 K 线 ────────────
 
-  /// 获取历史 K 线 — 根据配置选择数据源
+  /// 获取历史 K 线 — 根据配置选择数据源（带缓存+限流）
   Future<List<KlineData>> getKline({
     required String code,
     String period = 'day',
     int count = 200,
   }) async {
-    if (klineSource == DataSourceType.baidu) {
-      return await _baiduApi.getKline(code: code, count: count);
-    } else if (klineSource == DataSourceType.sina) {
-      return await _getKlineFromSina(code, period, count);
-    } else if (klineSource == DataSourceType.tencent) {
-      return await _getKlineFromTencent(code, period, count);
-    } else {
-      // auto 模式：并行竞速
-      final sources = <_Source<List<KlineData>>>[
-        _Source('tencent', _getKlineFromTencent(code, period, count)),
-      ];
+    // 分钟线缓存5分钟，日线缓存4小时
+    final isMinute = period.endsWith('m');
+    final cacheTtl = isMinute ? CacheManager.ttlKline : const Duration(hours: 4);
+    final cacheKey = 'kline_${code}_${period}_$count';
+    final cached = CacheManager.instance.get<List<KlineData>>(cacheKey);
+    if (cached != null && cached.isNotEmpty) return cached;
 
-      // 新浪只支持日/周/月线
-      if (['day', 'week', 'month'].contains(period)) {
-        sources.add(_Source('sina', _getKlineFromSina(code, period, count)));
+    Future<List<KlineData>> _fetch() async {
+      if (klineSource == DataSourceType.eastmoney) {
+        return await _getKlineFromEastMoney(code, period, count);
+      } else if (klineSource == DataSourceType.baidu) {
+        return await _baiduApi.getKline(code: code, count: count);
+      } else if (klineSource == DataSourceType.sina) {
+        return await _getKlineFromSina(code, period, count);
+      } else if (klineSource == DataSourceType.tencent) {
+        return await _getKlineFromTencent(code, period, count);
+      } else {
+        // auto 模式：腾讯优先（频率限制最宽松），并行竞速
+        final sources = <_Source<List<KlineData>>>[
+          _Source('tencent', _getKlineFromTencent(code, period, count)),
+          _Source('eastmoney', _getKlineFromEastMoney(code, period, count)),
+        ];
+
+        // 新浪只支持日/周/月线
+        if (['day', 'week', 'month'].contains(period)) {
+          sources.add(_Source('sina', _getKlineFromSina(code, period, count)));
+        }
+
+        return _race(sources);
       }
-
-      // 百度作为兜底
-      sources.add(_Source('baidu', _baiduApi.getKline(code: code, count: count)));
-
-      return _race(sources);
     }
+
+    final result = await _fetch();
+    if (result.isNotEmpty) {
+      CacheManager.instance.set(cacheKey, result, cacheTtl);
+    }
+    return result;
   }
 
   /// 新浪 K 线 API
@@ -192,6 +221,7 @@ class MarketApi {
     final url = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php'
         '/CN_MarketData.getKLineData?symbol=$code&scale=$scale&ma=5&datalen=$count';
 
+    await RateLimiter.instance.waitByUrl(url);
     final response = await _dio.get(url);
     final body = response.data is String ? response.data as String : response.data.toString();
 
@@ -250,33 +280,136 @@ class MarketApi {
     return results;
   }
 
-  /// 腾讯 K 线 API
-  Future<List<KlineData>> _getKlineFromTencent(String code, String period, int count) async {
-    final unit = _periodToUnit(period);
-    final formatted = StockCodeUtils.format(code);
-    final url = 'https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=$formatted,$unit,,$count';
+  /// 东方财富 K 线 API（akshare 推荐，支持日/周/月/分钟线）
+  Future<List<KlineData>> _getKlineFromEastMoney(String code, String period, int count) async {
+    final secid = StockCodeUtils.toSecId(code);
+    final klt = _periodToKlt(period);
 
-    final response = await _dio.get(url);
-    final raw = response.data is String
+    final params = {
+      'fields1': 'f1,f2,f3,f4,f5,f6',
+      'fields2': 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116',
+      'ut': '7eea3edcaed734bea9cbfc24409ed989',
+      'klt': klt,
+      'fqt': '1', // 前复权
+      'secid': secid,
+      'beg': '0',
+      'end': '20500000',
+    };
+
+    await RateLimiter.instance.waitByUrl(ApiEndpoints.eastmoneyKline);
+    final response = await _dio.get(ApiEndpoints.eastmoneyKline, queryParameters: params);
+    final data = response.data is String
         ? json.decode(response.data as String)
         : response.data;
 
-    if (raw is! Map) throw ParseException('腾讯K线响应格式错误');
+    if (data is! Map || data['data'] == null) {
+      throw ParseException('东方财富K线响应格式错误');
+    }
 
-    final dataMap = raw['data'];
-    if (dataMap is! Map) throw ParseException('腾讯K线data字段缺失');
+    final klines = data['data']['klines'];
+    if (klines == null || klines is! List || klines.isEmpty) {
+      throw ParseException('东方财富K线无数据');
+    }
 
-    final klineData = dataMap[formatted];
-    if (klineData is! Map) throw ParseException('腾讯K线股票数据为空: $formatted');
+    final results = <KlineData>[];
+    for (final line in klines) {
+      final fields = line.toString().split(',');
+      if (fields.length < 6) continue;
+      try {
+        results.add(KlineData(
+          time: _parseTime(fields[0]),
+          open: double.parse(fields[1]),
+          close: double.parse(fields[2]),
+          high: double.parse(fields[3]),
+          low: double.parse(fields[4]),
+          volume: double.parse(fields[5]),
+        ));
+      } catch (_) {}
+    }
 
-    // 尝试多种键名: day, week, month, m1, m5, m15, m30, m60
-    final rows = klineData[unit] ?? klineData['m${unit.replaceAll('m', '')}'];
-    if (rows == null || rows is! List || rows.isEmpty) {
-      throw ParseException('腾讯K线数据格式错误: unit=$unit, keys=${klineData.keys.toList()}');
+    // 只返回最近 count 条
+    if (results.length > count) {
+      return results.sublist(results.length - count);
+    }
+    return results;
+  }
+
+  /// 周期 → 东方财富 klt 参数
+  String _periodToKlt(String period) {
+    switch (period) {
+      case '1m': return '1';
+      case '5m': return '5';
+      case '15m': return '15';
+      case '30m': return '30';
+      case '60m': return '60';
+      case 'week': return '102';
+      case 'month': return '103';
+      default: return '101'; // day
+    }
+  }
+
+  /// 腾讯 K 线 API
+  /// 日/周/月线使用 fqkline/get 接口，分钟线使用 mkline 接口
+  Future<List<KlineData>> _getKlineFromTencent(String code, String period, int count) async {
+    final unit = _periodToUnit(period);
+    final formatted = StockCodeUtils.format(code);
+
+    final List<List<dynamic>> rows;
+
+    if (unit == 'day' || unit == 'week' || unit == 'month') {
+      // 日/周/月线：使用 fqkline/get 接口（稳定）
+      final url = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=$formatted,$unit,,,$count,qfq';
+      await RateLimiter.instance.waitByUrl(url);
+      final response = await _dio.get(url);
+      final raw = response.data is String
+          ? json.decode(response.data as String)
+          : response.data;
+
+      if (raw is! Map) throw ParseException('腾讯K线响应格式错误');
+      final dataMap = raw['data'];
+      if (dataMap is! Map || dataMap.isEmpty) throw ParseException('腾讯K线data字段缺失');
+
+      final klineData = dataMap[formatted];
+      if (klineData is! Map) throw ParseException('腾讯K线股票数据为空: $formatted');
+
+      // 键名：qfqday / qfqweek / qfqmonth（前复权）
+      final key = 'qfq$unit';
+      final rawRows = klineData[key] ?? klineData[unit];
+      if (rawRows == null || rawRows is! List || rawRows.isEmpty) {
+        throw ParseException('腾讯K线无数据: key=$key, keys=${klineData.keys.toList()}');
+      }
+      rows = rawRows.cast<List<dynamic>>();
+    } else {
+      // 分钟线：使用 mkline 接口
+      final url = 'https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=$formatted,$unit,,$count';
+      await RateLimiter.instance.waitByUrl(url);
+      final response = await _dio.get(url);
+      final raw = response.data is String
+          ? json.decode(response.data as String)
+          : response.data;
+
+      if (raw is! Map) throw ParseException('腾讯K线响应格式错误');
+      final dataMap = raw['data'];
+      // data 可能是空列表（无数据时）
+      if (dataMap is! Map) {
+        if (dataMap is List && dataMap.isEmpty) {
+          throw ParseException('腾讯分钟K线暂无数据');
+        }
+        throw ParseException('腾讯K线data字段缺失');
+      }
+
+      final klineData = dataMap[formatted];
+      if (klineData is! Map) throw ParseException('腾讯K线股票数据为空: $formatted');
+
+      final rawRows = klineData[unit] ?? klineData['m${unit.replaceAll('m', '')}'];
+      if (rawRows == null || rawRows is! List || rawRows.isEmpty) {
+        throw ParseException('腾讯K线数据格式错误: unit=$unit, keys=${klineData.keys.toList()}');
+      }
+      rows = rawRows.cast<List<dynamic>>();
     }
 
     return rows.map((row) {
-      if (row is! List || row.length < 6) return null;
+      if (row.length < 6) return null;
       try {
         return KlineData(
           time: _parseTime(row[0].toString()),

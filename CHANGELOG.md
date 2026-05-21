@@ -4,6 +4,116 @@
 
 ---
 
+## v1.6.0 (2026-05-21)
+
+**AI 功能扩展 + 全局限流 + 功能开关**
+
+### 新增功能
+
+**AI 热点发现**
+- 新增市场热点发现页面：输入查询（如"今日热点"/"A股热点"），返回 Markdown 表格报告
+- 调用东方财富 `hotspot-discovery` assistant API
+- 支持保存历史记录，可回溯查看
+- 入口：发现页「市场热点」功能卡片
+
+**AI 同业对比**
+- 新增可比公司分析页面：输入公司名（如"贵州茅台"），自动分析同业公司
+- 双 Tab 展示经营指标 + 估值指标，横向可滚动 DataTable
+- 自动格式化大数字（亿/万），含最大值/中位数/Z-Score 统计行
+- 调用东方财富 `comparable-company-analysis` assistant API
+- 入口：发现页「同业对比」功能卡片
+
+**AI 深度分析**
+- 技术分析页新增"深度分析"按钮，调用 `stock-analysis` assistant API
+- 返回 Markdown 格式的综合诊断报告
+- 自动保存到历史记录
+- Markdown 渲染：表格、标题、粗体、列表等完整支持
+
+**全局限流系统**
+- 新增 `RateLimiter` 全局单例：每域名独立限流，指数退避
+- 连续失败 5 次自动封锁 60 秒，之后逐步恢复
+- 集成到 MarketApi、FundFlowApi、SentimentApi、Scanner
+- 新增 `CacheManager` 内存 TTL 缓存（行情 5s/K线 60s/资金流 30s）
+
+**功能开关系统**
+- 设置页新增 3 个独立功能开关：市场热点、同业对比、深度分析
+- 每个功能可独立启用/禁用，关闭后发现页入口自动隐藏
+- 与现有 AI 功能总开关分离，精细控制
+
+**功能日志导出**
+- 设置页新增「功能日志导出」区域
+- 6 个独立导出按钮：热点发现/同业对比/深度分析/AI接口/行情数据/扫描选股
+- 按 tag 过滤日志，只导出指定功能的运行记录
+- `AppLog` 增强：新增 `getByTag`/`getByTags`/`toClipboardByTag`/`toClipboardByTags`
+
+### 新增文件
+- `lib/presentation/widgets/markdown_card.dart` — Markdown 渲染组件（深色主题）
+- `lib/data/models/ai_report.dart` — AI 报告数据模型（HotspotItem/ComparableCompanyData/AiQueryRecord）
+- `lib/data/datasources/local/ai_history_storage.dart` — AI 查询历史存储（最多 30 条）
+- `lib/presentation/screens/hotspot_screen.dart` — 热点发现页面
+- `lib/presentation/screens/comparable_company_screen.dart` — 可比公司分析页面
+- `lib/core/utils/rate_limiter.dart` — 全局限流器
+- `lib/data/datasources/local/cache_manager.dart` — 内存 TTL 缓存管理器
+
+### 修改文件
+- `lib/data/datasources/em_ai_api.dart` — 新增 3 个 assistant API 方法 + 操作日志
+- `lib/presentation/screens/analysis_screen.dart` — 深度分析 + MarkdownCard 渲染
+- `lib/presentation/screens/discover_screen.dart` — 新增热点/同业入口，使用独立开关
+- `lib/presentation/screens/settings_screen.dart` — 功能开关 + 功能日志导出 UI
+- `lib/presentation/providers/settings_provider.dart` — 新增 enableHotspot/enablePeerCompare/enableDeepAnalysis
+- `lib/data/datasources/local/settings_storage.dart` — 新增 3 个开关持久化 key
+- `lib/core/utils/app_logger.dart` — 增强 tag 过滤和导出能力
+- `lib/data/datasources/market_api.dart` — 集成限流 + 缓存
+- `lib/data/datasources/fund_flow_api.dart` — 集成限流
+- `lib/data/datasources/sentiment_api.dart` — 集成限流
+- `lib/domain/services/market_scanner.dart` — 集成限流，批处理优化
+- `pubspec.yaml` — 新增 flutter_markdown 依赖
+
+---
+
+## v1.5.0 (2026-05-21)
+
+**多股对比 + 资金流向 + K线数据源优化**
+
+### 新增功能
+
+**多股对比**
+- 新增多股对比页面：支持最多 5 只股票同时对比
+- 5 维评分引擎：估值/动量/波动/趋势/量能，每维 0-100 分
+- 雷达图可视化：`RadarChartPainter` 自绘五边形网格 + 填充多边形
+- 评分排名表：按总分排序，各维度分数 + 条形图
+- 股票搜索添加，长按删除，点击跳转K线图
+- 入口：发现页「多股对比」功能卡片
+
+**资金流向**
+- 新增独立资金流向页面：3 Tab 布局
+- 主力资金：大盘实时快照 + 全市场排行（今日/3日/5日/10日切换）
+- 板块资金：行业板块资金流向排行
+- 北向资金：实时快照 + 近 20 日净买入柱状图 + 板块持仓排名
+- 入口：发现页「资金流向」功能卡片
+
+**K 线数据源优化**
+- 新增东方财富 K 线数据源：`push2his.eastmoney.com/api/qt/stock/kline/get`
+- 支持日/周/月/分钟线，同一端点不同 `klt` 参数
+- auto 模式优先级：东方财富 → 腾讯 → 新浪
+- 腾讯日/周/月线改用 `fqkline/get` 接口（原 `mkline` 已失效）
+- 百度 K 线接口已失效，静默跳过不再抛异常
+
+### 新增文件
+- `lib/data/models/stock_score.dart` — 多维评分模型
+- `lib/domain/services/scoring_engine.dart` — 5 维评分引擎（纯 Dart 计算）
+- `lib/presentation/screens/compare_screen.dart` — 多股对比页面
+- `lib/presentation/widgets/chart/radar_chart_painter.dart` — 雷达图 Painter
+- `lib/presentation/screens/fund_flow_screen.dart` — 资金流向页面
+
+### 修改文件
+- `lib/core/constants/api_endpoints.dart` — 新增东方财富 K 线/分时端点
+- `lib/data/datasources/market_api.dart` — 集成东方财富 K 线 + 修复腾讯 K 线
+- `lib/data/datasources/baidu_api.dart` — 百度 K 线静默跳过
+- `lib/presentation/screens/discover_screen.dart` — 新增多股对比/资金流向入口
+
+---
+
 ## v1.4.0 (2026-05-20)
 
 **资金流向 + 北向深度 + 龙虎榜扩展**

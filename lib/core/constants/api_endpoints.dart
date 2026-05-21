@@ -25,8 +25,10 @@ class ApiEndpoints {
   // 板块资金流向
   static const String sectorFlow = '$eastmoneyPush/api/qt/clist/get';
 
-  // 个股资金流向（新数据源）
+  // push2his 数据源（K线 + 资金流）
   static const String eastmoneyPushHis = 'https://push2his.eastmoney.com';
+  static const String eastmoneyKline = '$eastmoneyPushHis/api/qt/stock/kline/get';
+  static const String eastmoneyTrends = '$eastmoneyPushHis/api/qt/stock/trends2/get';
   static const String fundFlowKline = '$eastmoneyPushHis/api/qt/stock/fflow/daykline/get';
   static const String fundFlowRank = '$eastmoneyPush/api/qt/clist/get';
   static const String marketFundFlow = '$eastmoneyPush/api/qt/ulist.np/get';

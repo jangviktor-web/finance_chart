@@ -11,6 +11,10 @@ import 'sentiment_screen.dart';
 import 'macro_screen.dart';
 import 'news_screen.dart';
 import 'ai_chat_screen.dart';
+import 'compare_screen.dart';
+import 'fund_flow_screen.dart';
+import 'hotspot_screen.dart';
+import 'comparable_company_screen.dart';
 import '../../data/datasources/search_api.dart';
 
 /// 大盘指数数据
@@ -389,8 +393,14 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         ('财经新闻', Icons.article_outlined, AppColors.ma5, () => const NewsScreen()),
       if (settings.enableScan)
         ('选股扫描', Icons.radar, AppColors.warning, () => const ScanScreen()),
+      ('多股对比', Icons.compare_arrows, AppColors.ma10, () => const CompareScreen()),
+      ('资金流向', Icons.account_balance, AppColors.ma60, () => const FundFlowScreen()),
       if (settings.enableAi)
         ('AI 助手', Icons.smart_toy, AppColors.primary, () => const AiChatScreen()),
+      if (settings.enableHotspot)
+        ('市场热点', Icons.whatshot, AppColors.up, () => const HotspotScreen()),
+      if (settings.enablePeerCompare)
+        ('同业对比', Icons.bar_chart, AppColors.ma20, () => const ComparableCompanyScreen()),
     ];
 
     if (items.isEmpty) return const SizedBox.shrink();

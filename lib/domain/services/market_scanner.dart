@@ -5,6 +5,7 @@ import '../../data/models/kline_data.dart';
 import '../../data/models/scan_result.dart';
 import '../../data/datasources/market_api.dart';
 import '../../data/repositories/market_repository.dart';
+import '../../core/utils/rate_limiter.dart';
 
 /// 全市场扫描服务 — 批量获取K线并检测买入信号
 class MarketScanner {
@@ -20,10 +21,10 @@ class MarketScanner {
     final stocks = await _getFullStockList();
     final filtered = _filterStocks(stocks, config);
 
-    // 2. 批量扫描
+    // 2. 批量扫描（限制并发避免被封）
     final results = <ScanResult>[];
     final total = filtered.length;
-    final batchSize = 10;
+    final batchSize = 3;
 
     for (int i = 0; i < total; i += batchSize) {
       final batch = filtered.skip(i).take(batchSize).toList();
@@ -41,6 +42,11 @@ class MarketScanner {
       final batchResults = await Future.wait(futures);
       for (final result in batchResults) {
         if (result != null) results.add(result);
+      }
+
+      // 批次间延迟，避免触发频率限制
+      if (i + batchSize < total) {
+        await Future.delayed(const Duration(milliseconds: 300));
       }
     }
 
@@ -261,6 +267,7 @@ class MarketScanner {
             'fields': 'f12,f14',
           };
 
+          await RateLimiter.instance.wait(host);
           final response = await dio.get(
             'https://$host/api/qt/clist/get',
             queryParameters: params,

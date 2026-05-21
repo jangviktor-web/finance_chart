@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/app_logger.dart';
 import '../../data/models/kline_data.dart';
 import '../../data/models/indicator_data.dart';
 import '../../data/models/pattern_result.dart';
+import 'package:uuid/uuid.dart';
 import '../../data/models/ai_data.dart';
+import '../../data/models/ai_report.dart';
+import '../../data/datasources/local/ai_history_storage.dart';
+import '../widgets/markdown_card.dart';
 import '../../data/models/sentiment_data.dart';
 import '../../data/datasources/em_ai_api.dart';
 import '../../data/datasources/fund_flow_api.dart';
@@ -36,6 +41,9 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   EmAiApi? _aiApi;
   AiDiagnosisResult? _aiResult;
   bool _aiLoading = false;
+
+  String _deepAnalysisMarkdown = '';
+  bool _deepAnalysisLoading = false;
 
   List<FundFlowDetail> _fundFlowData = [];
   bool _fundFlowLoading = false;
@@ -88,6 +96,39 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
         );
         _aiLoading = false;
       });
+    }
+  }
+
+  Future<void> _runDeepAnalysis() async {
+    setState(() => _deepAnalysisLoading = true);
+    AppLog.instance.info('DeepAnalysis', '开始深度分析: ${widget.stockName}');
+    try {
+      final api = _getApi();
+      final result = await api.getStockAnalysis('${widget.stockName}值得持有吗');
+      AppLog.instance.info('DeepAnalysis', '深度分析完成: ${widget.stockName}, 结果长度=${result.length}');
+      if (mounted) {
+        setState(() {
+          _deepAnalysisMarkdown = result;
+          _deepAnalysisLoading = false;
+        });
+        // 保存到历史
+        final storage = AiHistoryStorage();
+        await storage.saveRecord(AiQueryRecord(
+          id: const Uuid().v4(),
+          type: 'diagnosis',
+          query: '${widget.stockName} 深度分析',
+          resultMarkdown: result,
+          timestamp: DateTime.now(),
+        ));
+      }
+    } catch (e) {
+      AppLog.instance.error('DeepAnalysis', '深度分析失败: $e');
+      if (mounted) {
+        setState(() {
+          _deepAnalysisMarkdown = '深度分析失败: $e';
+          _deepAnalysisLoading = false;
+        });
+      }
     }
   }
 
@@ -692,22 +733,43 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          // AI 对话按钮
-          Center(
-            child: TextButton.icon(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => AiChatScreen(
-                    initialCode: widget.stockCode,
-                    initialName: widget.stockName,
-                  ),
-                ));
-              },
-              icon: const Icon(Icons.chat_bubble_outline, size: 18),
-              label: const Text('AI 对话'),
-              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-            ),
+          // 深度分析 + AI 对话按钮
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _deepAnalysisLoading ? null : _runDeepAnalysis,
+                icon: _deepAnalysisLoading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.analytics, size: 18),
+                label: const Text('深度分析'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => AiChatScreen(
+                      initialCode: widget.stockCode,
+                      initialName: widget.stockName,
+                    ),
+                  ));
+                },
+                icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                label: const Text('AI 对话'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+              ),
+            ],
           ),
+          // 深度分析结果
+          if (_deepAnalysisMarkdown.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            MarkdownCard(markdown: _deepAnalysisMarkdown),
+          ],
         ],
       ],
     );

@@ -22,6 +22,9 @@ class AppSettings {
   final bool enableNews;
   final bool enableScan;
   final bool enableAi;
+  final bool enableHotspot;
+  final bool enablePeerCompare;
+  final bool enableDeepAnalysis;
   final String emApiKey;
   final DataSourceType realtimeSource;
   final DataSourceType klineSource;
@@ -41,6 +44,9 @@ class AppSettings {
     this.enableNews = true,
     this.enableScan = true,
     this.enableAi = true,
+    this.enableHotspot = true,
+    this.enablePeerCompare = true,
+    this.enableDeepAnalysis = true,
     this.emApiKey = 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH',
     this.realtimeSource = DataSourceType.auto,
     this.klineSource = DataSourceType.auto,
@@ -61,6 +67,9 @@ class AppSettings {
     bool? enableNews,
     bool? enableScan,
     bool? enableAi,
+    bool? enableHotspot,
+    bool? enablePeerCompare,
+    bool? enableDeepAnalysis,
     String? emApiKey,
     DataSourceType? realtimeSource,
     DataSourceType? klineSource,
@@ -80,6 +89,9 @@ class AppSettings {
       enableNews: enableNews ?? this.enableNews,
       enableScan: enableScan ?? this.enableScan,
       enableAi: enableAi ?? this.enableAi,
+      enableHotspot: enableHotspot ?? this.enableHotspot,
+      enablePeerCompare: enablePeerCompare ?? this.enablePeerCompare,
+      enableDeepAnalysis: enableDeepAnalysis ?? this.enableDeepAnalysis,
       emApiKey: emApiKey ?? this.emApiKey,
       realtimeSource: realtimeSource ?? this.realtimeSource,
       klineSource: klineSource ?? this.klineSource,
@@ -109,6 +121,9 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       storage.loadEnableNews(),
       storage.loadEnableScan(),
       storage.loadEnableAi(),
+      storage.loadEnableHotspot(),
+      storage.loadEnablePeerCompare(),
+      storage.loadEnableDeepAnalysis(),
       storage.loadEmApiKey(),
       storage.loadRealtimeSource(),
       storage.loadKlineSource(),
@@ -128,11 +143,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       enableNews: results[9] as bool,
       enableScan: results[10] as bool,
       enableAi: results[11] as bool,
-      emApiKey: results[12] as String,
-      realtimeSource: DataSourceConfig.fromString(results[13] as String),
-      klineSource: DataSourceConfig.fromString(results[14] as String),
-      newsSource: DataSourceConfig.fromString(results[15] as String),
-      fundFlowSource: DataSourceConfig.fromString(results[16] as String),
+      enableHotspot: results[12] as bool,
+      enablePeerCompare: results[13] as bool,
+      enableDeepAnalysis: results[14] as bool,
+      emApiKey: results[15] as String,
+      realtimeSource: DataSourceConfig.fromString(results[16] as String),
+      klineSource: DataSourceConfig.fromString(results[17] as String),
+      newsSource: DataSourceConfig.fromString(results[18] as String),
+      fundFlowSource: DataSourceConfig.fromString(results[19] as String),
     );
   }
 
@@ -194,6 +212,21 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> setEnableAi(bool value) async {
     state = state.copyWith(enableAi: value);
     await _ref.read(settingsStorageProvider).saveEnableAi(value);
+  }
+
+  Future<void> setEnableHotspot(bool value) async {
+    state = state.copyWith(enableHotspot: value);
+    await _ref.read(settingsStorageProvider).saveEnableHotspot(value);
+  }
+
+  Future<void> setEnablePeerCompare(bool value) async {
+    state = state.copyWith(enablePeerCompare: value);
+    await _ref.read(settingsStorageProvider).saveEnablePeerCompare(value);
+  }
+
+  Future<void> setEnableDeepAnalysis(bool value) async {
+    state = state.copyWith(enableDeepAnalysis: value);
+    await _ref.read(settingsStorageProvider).saveEnableDeepAnalysis(value);
   }
 
   Future<void> setEmApiKey(String value) async {

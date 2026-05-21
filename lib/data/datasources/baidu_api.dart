@@ -59,45 +59,16 @@ class BaiduApi {
   }
 
   /// 获取 K 线数据
+  /// 注意：百度 K 线接口当前不可用（返回空数据），保留方法以备后续恢复
   Future<List<KlineData>> getKline({
     required String code,
     int count = 100,
     int fqtype = 1, // 1=前复权, 2=后复权, 3=不复权
   }) async {
-    final pureCode = StockCodeUtils.pureCode(code);
-    final url = 'https://finance.pae.baidu.com/selfselect/getstockquotation'
-        '?code=$pureCode&market=ab&is498=1&isBk=false&isBlock=false'
-        '&isFutures=false&isStock=true&newFormat=1&count=$count&fqtype=$fqtype';
-
-    try {
-      final response = await _dio.get(url);
-      final data = response.data is String ? json.decode(response.data) : response.data;
-
-      final result = data['Result'] ?? data['result'] ?? [];
-      if (result.isEmpty) {
-        throw Exception('百度K线: 无数据');
-      }
-
-      final List<KlineData> klines = [];
-      for (final item in result) {
-        final dateStr = item['date']?.toString() ?? '';
-        final date = DateTime.tryParse(dateStr) ?? DateTime.now();
-
-        klines.add(KlineData(
-          time: date,
-          open: _toDouble(item['open']),
-          close: _toDouble(item['close']),
-          high: _toDouble(item['high']),
-          low: _toDouble(item['low']),
-          volume: _toDouble(item['volume']),
-        ));
-      }
-
-      return klines;
-    } catch (e) {
-      AppLog.instance.error('BaiduApi', 'getKline 失败: $e');
-      rethrow;
-    }
+    // 百度 K 线 API 已失效（getstockquotation 返回空 Result，getquotation 返回 403）
+    // 直接返回空列表，让降级引擎切换到其他数据源
+    AppLog.instance.info('BaiduApi', '百度K线接口暂不可用，跳过');
+    return [];
   }
 
   /// 获取概念板块

@@ -67,6 +67,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 (v) => ref.read(settingsProvider.notifier).setEnableScan(v)),
             _buildSwitch('AI 功能', settings.enableAi,
                 (v) => ref.read(settingsProvider.notifier).setEnableAi(v)),
+            _buildSwitch('市场热点', settings.enableHotspot,
+                (v) => ref.read(settingsProvider.notifier).setEnableHotspot(v)),
+            _buildSwitch('同业对比', settings.enablePeerCompare,
+                (v) => ref.read(settingsProvider.notifier).setEnablePeerCompare(v)),
+            _buildSwitch('深度分析', settings.enableDeepAnalysis,
+                (v) => ref.read(settingsProvider.notifier).setEnableDeepAnalysis(v)),
           ]),
           _buildSection('AI 配置', [
             _buildApiKeyInput(settings.emApiKey),
@@ -84,7 +90,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _buildSection('数据管理', [
             _buildActionRow('清除缓存', '清除本地缓存的行情数据', _clearCache),
             _buildActionRow('导出自选股', '导出自选股列表到剪贴板', _exportWatchlist),
-            _buildActionRow('导出运行日志', '复制最近500条日志到剪贴板', _exportLogs),
+            _buildActionRow('导出全部日志', '复制最近500条日志到剪贴板', _exportLogs),
+          ]),
+          _buildSection('功能日志导出', [
+            _buildActionRow('热点发现日志', '导出热点查询相关日志', () => _exportFeatureLog('Hotspot')),
+            _buildActionRow('同业对比日志', '导出同业分析相关日志', () => _exportFeatureLog('PeerCompare')),
+            _buildActionRow('深度分析日志', '导出深度分析相关日志', () => _exportFeatureLog('DeepAnalysis')),
+            _buildActionRow('AI 接口日志', '导出 EmAiApi 调用日志', () => _exportFeatureLog('EmAiApi')),
+            _buildActionRow('行情数据日志', '导出行情/资金流/情绪日志', () => _exportFeatureLogs(['MarketApi', 'FundFlow', 'Sentiment'])),
+            _buildActionRow('扫描选股日志', '导出选股扫描相关日志', () => _exportFeatureLog('Scanner')),
           ]),
           _buildSection('关于', [
             _buildInfoRow('应用名称', '策盈 QuantWin', AppColors.primary),
@@ -561,6 +575,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           content: Text('已复制 $count 条日志到剪贴板'),
           backgroundColor: AppColors.up,
         ),
+      );
+    }
+  }
+
+  Future<void> _exportFeatureLog(String tag) async {
+    final text = AppLog.instance.getByTag(tag);
+    if (text.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('暂无 $tag 相关日志'), backgroundColor: AppColors.warning),
+        );
+      }
+      return;
+    }
+    await AppLog.instance.toClipboardByTag(tag);
+    final count = text.split('\n').length;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已复制 $count 条 $tag 日志到剪贴板'), backgroundColor: AppColors.up),
+      );
+    }
+  }
+
+  Future<void> _exportFeatureLogs(List<String> tags) async {
+    final text = AppLog.instance.getByTags(tags);
+    if (text.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('暂无相关日志'), backgroundColor: AppColors.warning),
+        );
+      }
+      return;
+    }
+    await AppLog.instance.toClipboardByTags(tags);
+    final count = text.split('\n').length;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已复制 $count 条日志到剪贴板'), backgroundColor: AppColors.up),
       );
     }
   }

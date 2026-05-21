@@ -14,6 +14,9 @@ class SettingsStorage {
   static const _keyEnableNews = 'setting_enable_news';
   static const _keyEnableScan = 'setting_enable_scan';
   static const _keyEnableAi = 'setting_enable_ai';
+  static const _keyEnableHotspot = 'setting_enable_hotspot';
+  static const _keyEnablePeerCompare = 'setting_enable_peer_compare';
+  static const _keyEnableDeepAnalysis = 'setting_enable_deep_analysis';
   static const _keyEmApiKey = 'setting_em_api_key';
   static const _keyRealtimeSource = 'setting_realtime_source';
   static const _keyKlineSource = 'setting_kline_source';
@@ -59,6 +62,15 @@ class SettingsStorage {
 
   Future<bool> loadEnableAi() async =>
       (await _prefs).getBool(_keyEnableAi) ?? true;
+
+  Future<bool> loadEnableHotspot() async =>
+      (await _prefs).getBool(_keyEnableHotspot) ?? true;
+
+  Future<bool> loadEnablePeerCompare() async =>
+      (await _prefs).getBool(_keyEnablePeerCompare) ?? true;
+
+  Future<bool> loadEnableDeepAnalysis() async =>
+      (await _prefs).getBool(_keyEnableDeepAnalysis) ?? true;
 
   Future<String> loadEmApiKey() async =>
       (await _prefs).getString(_keyEmApiKey) ?? 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH';
@@ -112,6 +124,15 @@ class SettingsStorage {
 
   Future<void> saveEnableAi(bool value) async =>
       (await _prefs).setBool(_keyEnableAi, value);
+
+  Future<void> saveEnableHotspot(bool value) async =>
+      (await _prefs).setBool(_keyEnableHotspot, value);
+
+  Future<void> saveEnablePeerCompare(bool value) async =>
+      (await _prefs).setBool(_keyEnablePeerCompare, value);
+
+  Future<void> saveEnableDeepAnalysis(bool value) async =>
+      (await _prefs).setBool(_keyEnableDeepAnalysis, value);
 
   Future<void> saveEmApiKey(String value) async =>
       (await _prefs).setString(_keyEmApiKey, value);
