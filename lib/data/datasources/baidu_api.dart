@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/kline_data.dart';
 import '../models/realtime_quote.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/rate_limiter.dart';
 import '../../core/utils/stock_code_utils.dart';
 
 /// 百度财经 API 数据源
@@ -29,6 +30,7 @@ class BaiduApi {
         '?code=$pureCode&market=ab&is498=1&isBk=false&isBlock=false'
         '&isFutures=false&isStock=true&newFormat=1';
 
+    await RateLimiter.instance.wait('finance.pae.baidu.com');
     try {
       final response = await _dio.get(url);
       final data = response.data is String ? json.decode(response.data) : response.data;
@@ -77,6 +79,7 @@ class BaiduApi {
         '?srcid=5353&all=1&pointType=string&group=quotation_kline_ab'
         '&query=概念板块&code=concept&market=ab&finClientType=pc';
 
+    await RateLimiter.instance.wait('finance.pae.baidu.com');
     try {
       final response = await _dio.get(url);
       final data = response.data is String ? json.decode(response.data) : response.data;

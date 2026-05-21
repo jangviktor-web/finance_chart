@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/stock_info_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/rate_limiter.dart';
 
 /// 个股深度数据 API — 东方财富（带降级）
 class StockInfoApi {
@@ -21,6 +22,7 @@ class StockInfoApi {
   /// 股东人数变化 — 多报表名降级
   Future<List<ShareholderData>> getShareholders(String code, {int limit = 10}) async {
     final secCode = code.replaceAll(RegExp(r'^(sh|sz)'), '');
+    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
 
     // 尝试多个可能的报表名
     final reportNames = [
@@ -70,6 +72,7 @@ class StockInfoApi {
     final secCode = code.replaceAll(RegExp(r'^(sh|sz)'), '');
     final secid = code.startsWith('sh') ? '$secCode.SH' : '$secCode.SZ';
 
+    await RateLimiter.instance.wait('push2.eastmoney.com');
     try {
       final url = '${ApiEndpoints.eastmoneyPush}/api/qt/stock/get';
       final params = {
@@ -94,6 +97,7 @@ class StockInfoApi {
     } catch (_) {}
 
     // 降级: 用行情接口获取基本估值
+    await RateLimiter.instance.wait('qt.gtimg.cn');
     try {
       final quoteUrl = 'https://qt.gtimg.cn/q=$code';
       final response = await _dio.get(quoteUrl);
@@ -118,6 +122,7 @@ class StockInfoApi {
   /// 大宗交易 — 多报表名降级
   Future<List<BlockTrade>> getBlockTrades(String code, {int limit = 20}) async {
     final secCode = code.replaceAll(RegExp(r'^(sh|sz)'), '');
+    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
 
     final reportNames = [
       'RPT_BLOCKTRADE_DETAILNEW',
@@ -167,6 +172,7 @@ class StockInfoApi {
   /// 限售解禁 — RPT_LIFT_STAGE 已验证可用
   Future<List<RestrictedShare>> getRestrictedShares(String code, {int limit = 10}) async {
     final secCode = code.replaceAll(RegExp(r'^(sh|sz)'), '');
+    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
     final params = {
       'sortColumns': 'FREE_DATE',
       'sortTypes': '-1',

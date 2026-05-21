@@ -3,6 +3,8 @@ import 'package:dio/dio.dart';
 import '../models/macro_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/rate_limiter.dart';
+import 'local/cache_manager.dart';
 
 /// 宏观经济数据 API — 东方财富
 class MacroApi {
@@ -101,6 +103,12 @@ class MacroApi {
 
   /// LPR 数据 — 降级: 用 push2 API 或硬编码最新数据
   Future<List<LprData>> getLpr({int limit = 20}) async {
+    // 缓存 1 小时
+    final cacheKey = 'macro_LPR';
+    final cached = CacheManager.instance.get<List<LprData>>(cacheKey);
+    if (cached != null) return cached;
+
+    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
     // 尝试 datacenter-web
     try {
       final params = {
@@ -119,11 +127,13 @@ class MacroApi {
       if (data['result'] != null) {
         final rows = data['result']['data'] as List? ?? [];
         if (rows.isNotEmpty) {
-          return rows.map((item) => LprData(
+          final result = rows.map((item) => LprData(
             date: _formatPeriod(item['REPORT_DATE']),
             lpr1y: _toDouble(item['LPR_1Y']),
             lpr5y: _toDouble(item['LPR_5Y']),
           )).toList();
+          CacheManager.instance.set(cacheKey, result, CacheManager.ttlMacro);
+          return result;
         }
       }
     } catch (_) {}
@@ -144,22 +154,26 @@ class MacroApi {
       if (data['data'] != null) {
         final rows = (data['data']['diff'] as List?) ?? [];
         if (rows.isNotEmpty) {
-          return rows.map((item) => LprData(
+          final result = rows.map((item) => LprData(
             date: item['f14']?.toString() ?? '',
             lpr1y: _toDouble(item['f2']),
             lpr5y: 0,
           )).toList();
+          CacheManager.instance.set(cacheKey, result, CacheManager.ttlMacro);
+          return result;
         }
       }
     } catch (_) {}
 
     // 最终降级: 返回最近已知的 LPR 数据
-    return [
+    final fallback = [
       LprData(date: '2026-04', lpr1y: 3.10, lpr5y: 3.60),
       LprData(date: '2026-03', lpr1y: 3.10, lpr5y: 3.60),
       LprData(date: '2026-02', lpr1y: 3.10, lpr5y: 3.60),
       LprData(date: '2026-01', lpr1y: 3.10, lpr5y: 3.60),
     ];
+    CacheManager.instance.set(cacheKey, fallback, CacheManager.ttlMacro);
+    return fallback;
   }
 
   Future<MacroIndicator> _fetchMacro({
@@ -170,6 +184,13 @@ class MacroApi {
     required int limit,
     required MacroDataPoint Function(Map<String, dynamic>) parse,
   }) async {
+    // 宏观数据变化慢，缓存 1 小时
+    final cacheKey = 'macro_$reportName';
+    final cached = CacheManager.instance.get<MacroIndicator>(cacheKey);
+    if (cached != null) return cached;
+
+    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
+
     final params = {
       'sortColumns': 'REPORT_DATE',
       'sortTypes': '-1',
@@ -199,13 +220,15 @@ class MacroApi {
 
       points.sort((a, b) => a.period.compareTo(b.period));
 
-      return MacroIndicator(
+      final result = MacroIndicator(
         name: name,
         unit: unit,
         data: points,
         latestValue: points.isNotEmpty ? points.last.value : null,
         latestYoy: points.isNotEmpty ? points.last.yoy : null,
       );
+      CacheManager.instance.set(cacheKey, result, CacheManager.ttlMacro);
+      return result;
     } catch (e) {
       AppLog.instance.error('MacroApi', '获取 $name 失败: $e');
       return MacroIndicator(name: name, unit: unit, data: []);

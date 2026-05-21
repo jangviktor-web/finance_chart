@@ -71,7 +71,7 @@ class FundFlowApi {
 
   /// 大盘实时资金流快照（上证+深证）
   Future<MarketFundFlow> getMarketFundFlow() async {
-    await RateLimiter.instance.wait('push2his.eastmoney.com');
+    await RateLimiter.instance.wait('push2.eastmoney.com');
 
     final params = {
       'fltt': '2',
@@ -118,7 +118,7 @@ class FundFlowApi {
     String period = 'today',
     int limit = 50,
   }) async {
-    await RateLimiter.instance.wait('push2his.eastmoney.com');
+    await RateLimiter.instance.wait('push2.eastmoney.com');
 
     final indicatorMap = {
       'today': {'fid': 'f62', 'fields': 'f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87'},

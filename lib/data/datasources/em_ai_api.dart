@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../models/ai_data.dart';
 import '../models/ai_report.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/rate_limiter.dart';
 
 /// 东方财富妙想 API 客户端（直连模式）
 /// 参考 Aeolus 项目实现
@@ -47,6 +48,7 @@ class EmAiApi {
       return {'error': 'API Key 未配置'};
     }
 
+    await RateLimiter.instance.wait('ai-saas.eastmoney.com');
     try {
       final response = await _dio.post(
         _searchDataUrl,
@@ -94,6 +96,7 @@ class EmAiApi {
   Future<List<AiStockPick>> selectStocks(String query, {int pageSize = 20}) async {
     if (_apiKey.isEmpty) return [];
 
+    await RateLimiter.instance.wait('mkapi2.dfcfs.com');
     try {
       final response = await _dio.post(
         _stockPickUrl,

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/news_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/rate_limiter.dart';
 
 /// 新闻资讯 API — 多源降级
 class NewsApi {
@@ -20,6 +21,7 @@ class NewsApi {
 
   /// 东方财富 7x24 快讯（主数据源）
   Future<List<LiveNewsItem>> get7x24News({int page = 1, int pageSize = 20}) async {
+    await RateLimiter.instance.wait('np-listapi.eastmoney.com');
     try {
       final params = {
         'client': 'web',
@@ -70,6 +72,7 @@ class NewsApi {
 
   /// 新浪 7x24 快讯（备用数据源）
   Future<List<LiveNewsItem>> _fetchSinaLiveNews({int page = 1, int pageSize = 20}) async {
+    await RateLimiter.instance.wait('zhibo.sina.com.cn');
     try {
       final url = 'https://zhibo.sina.com.cn/api/zhibo/feedlist';
       final params = {
@@ -99,6 +102,7 @@ class NewsApi {
 
   /// 财联社快讯（多版本降级）
   Future<List<LiveNewsItem>> getCLSNews({int page = 1, int pageSize = 20}) async {
+    await RateLimiter.instance.wait('cls.cn');
     // 尝试多个版本的 CLS API
     final versions = ['8.4.6', '8.0.0', '7.7.5', '7.5.0'];
 
@@ -151,6 +155,7 @@ class NewsApi {
 
   /// 东方财富新闻搜索（JSONP + 降级）
   Future<List<NewsItem>> searchNews(String keyword, {int page = 1, int pageSize = 20}) async {
+    await RateLimiter.instance.wait('search-api-web.eastmoney.com');
     // 尝试 JSONP 格式
     try {
       final result = await _searchNewsJsonp(keyword, page: page, pageSize: pageSize);

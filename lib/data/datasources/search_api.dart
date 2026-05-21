@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import '../../core/utils/rate_limiter.dart';
 import '../../core/utils/stock_code_utils.dart';
 
 /// 搜索结果
@@ -23,6 +24,7 @@ class SearchApi {
   Future<List<SearchResult>> search(String keyword) async {
     if (keyword.trim().isEmpty) return [];
 
+    await RateLimiter.instance.wait('searchapi.eastmoney.com');
     try {
       final url = 'https://searchapi.eastmoney.com/api/suggest/get'
           '?input=${Uri.encodeComponent(keyword)}&type=14&count=10';
