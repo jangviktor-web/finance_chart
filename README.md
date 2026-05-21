@@ -1,11 +1,13 @@
-# 策盈 QuantWin
+# 策盈 QuantWin — A股量化分析 | 股票技术分析 | AI 智能选股
 
-> A 股量化分析工具箱 — 纯 Flutter 客户端，无需后端，数据全来自公开免费 API
+[![Flutter 量化分析工具](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
+[![Dart A股量化](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
+[![A股量化分析最新版本](https://img.shields.io/github/v/release/jangviktor-web/finance_chart?label=Latest)](https://github.com/jangviktor-web/finance_chart/releases)
+[![开源量化工具MIT协议](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
-[![Release](https://img.shields.io/github/v/release/jangviktor-web/finance_chart?label=Latest)](https://github.com/jangviktor-web/finance_chart/releases)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+> 策盈 QuantWin 是一款开源免费的 **A 股量化分析工具箱**，基于 Flutter 构建，无需后端服务。集成 **25+ 技术指标**、**AI 智能选股与诊断**、**资金流向分析**、**北向资金追踪**、**龙虎榜解读**、**宏观经济数据**、**策略回测引擎**，数据全部来自东方财富、腾讯、百度等公开免费 API。
+
+**关键词**：A股量化分析 · 股票技术分析 · AI选股 · MACD · KDJ · RSI · 资金流向 · 北向资金 · 龙虎榜 · 策略回测 · Flutter量化工具
 
 ---
 
@@ -21,9 +23,9 @@
 
 ---
 
-## 功能
+## 功能特性
 
-### 行情
+### 股票行情数据
 
 | 功能 | 说明 |
 |---|---|
@@ -41,7 +43,7 @@
 | 形态 | 锤子线 · 十字星 · 吞没 · 启明星 |
 | 自定义 | 所有指标参数可调 |
 
-### AI 智能（东方财富妙想）
+### AI 智能选股与诊断（东方财富妙想）
 
 | 功能 | 说明 |
 |---|---|
