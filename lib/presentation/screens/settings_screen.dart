@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme.dart';
 import '../../core/utils/app_logger.dart';
+import '../../core/utils/key_cipher.dart';
 import '../../data/models/data_source_config.dart';
 import '../providers/settings_provider.dart';
 import '../providers/watchlist_provider.dart';
@@ -23,7 +24,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _connectionStatus = '未连接';
   Color _connectionColor = AppColors.textSecondary;
   bool _showAdvanced = false;
-  bool _showApiKey = false;
 
   @override
   void dispose() {
@@ -795,13 +795,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  String _maskKey(String key) {
-    if (key.length <= 12) return key;
-    return '${key.substring(0, 6)}***${key.substring(key.length - 6)}';
+  void _showEditApiKeyDialog(String currentKey) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: Text('设置 API Key', style: TextStyle(color: AppColors.textPrimary)),
+        content: TextField(
+          controller: controller,
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: '粘贴完整的 API Key',
+            hintStyle: TextStyle(color: AppColors.textSecondary),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('取消', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) {
+                ref.read(settingsProvider.notifier).setEmApiKey(value);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('API Key 已保存'), duration: Duration(seconds: 1)),
+                );
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('保存', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildApiKeyInput(String currentKey) {
-    final controller = TextEditingController(text: currentKey);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
@@ -809,75 +848,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           Text('东方财富妙想 API Key', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
           const SizedBox(height: 8),
-          // 脱敏显示
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _showApiKey ? currentKey : _maskKey(currentKey),
-                    style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'monospace'),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() => _showApiKey = !_showApiKey),
-                  child: Icon(
-                    _showApiKey ? Icons.visibility_off : Icons.visibility,
-                    color: AppColors.textSecondary,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          // 输入框 + 保存
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: '输入新的 API Key',
-                    hintStyle: TextStyle(color: AppColors.textSecondary),
-                    filled: true,
-                    fillColor: AppColors.cardBackground,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
+          // 脱敏显示 + 编辑按钮
+          GestureDetector(
+            onTap: () => _showEditApiKeyDialog(currentKey),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, color: AppColors.textSecondary, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      KeyCipher.mask(currentKey),
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'monospace'),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    isDense: true,
                   ),
-                ),
+                  Icon(Icons.edit, color: AppColors.textSecondary, size: 16),
+                ],
               ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  ref.read(settingsProvider.notifier).setEmApiKey(controller.text);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('API Key 已保存'), duration: Duration(seconds: 1)),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                ),
-                child: const Text('保存', style: TextStyle(fontSize: 13)),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 4),
           Text(
-            '在东方财富妙想 Skills 页面获取',
+            '点击编辑 · 在东方财富妙想 Skills 页面获取',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
           ),
         ],

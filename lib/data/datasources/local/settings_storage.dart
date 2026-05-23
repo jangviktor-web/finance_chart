@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/utils/key_cipher.dart';
 
 /// 应用设置本地持久化
 class SettingsStorage {
@@ -72,8 +73,12 @@ class SettingsStorage {
   Future<bool> loadEnableDeepAnalysis() async =>
       (await _prefs).getBool(_keyEnableDeepAnalysis) ?? true;
 
-  Future<String> loadEmApiKey() async =>
-      (await _prefs).getString(_keyEmApiKey) ?? 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH';
+  Future<String> loadEmApiKey() async {
+    final stored = (await _prefs).getString(_keyEmApiKey);
+    if (stored == null) return 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH';
+    // 兼容旧版明文：未加密的原样返回，已加密的解密后返回
+    return KeyCipher.decrypt(stored);
+  }
 
   Future<String> loadRealtimeSource() async =>
       (await _prefs).getString(_keyRealtimeSource) ?? 'auto';
@@ -135,7 +140,7 @@ class SettingsStorage {
       (await _prefs).setBool(_keyEnableDeepAnalysis, value);
 
   Future<void> saveEmApiKey(String value) async =>
-      (await _prefs).setString(_keyEmApiKey, value);
+      (await _prefs).setString(_keyEmApiKey, KeyCipher.encrypt(value));
 
   Future<void> saveRealtimeSource(String value) async =>
       (await _prefs).setString(_keyRealtimeSource, value);
