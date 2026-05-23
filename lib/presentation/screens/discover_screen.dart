@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:fast_gbk/fast_gbk.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../app/theme.dart';
 import '../providers/settings_provider.dart';
 import 'scan_screen.dart';
@@ -13,10 +14,13 @@ import 'news_screen.dart';
 import 'ai_chat_screen.dart';
 import 'compare_screen.dart';
 import 'fund_flow_screen.dart';
-import 'hotspot_screen.dart';
 import 'comparable_company_screen.dart';
 import '../../data/datasources/search_api.dart';
 import '../../data/datasources/sentiment_api.dart';
+import '../../data/datasources/em_ai_api.dart';
+import '../../data/datasources/local/ai_history_storage.dart';
+import '../../data/models/ai_report.dart';
+import '../widgets/markdown_card.dart';
 
 /// 大盘指数数据
 class IndexData {
@@ -68,6 +72,13 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   String? _error;
   final _sentimentApi = SentimentApi();
 
+  // ── 热点资讯 ──
+  final _hotspotController = TextEditingController(text: '今日热点');
+  final _hotspotStorage = AiHistoryStorage();
+  List<HotspotItem> _hotspotItems = [];
+  String _hotspotMarkdown = '';
+  bool _hotspotLoading = false;
+
   static const _indexCodes = [
     ('sh000001', '上证指数'),
     ('sz399001', '深证成指'),
@@ -79,6 +90,13 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _loadHotspot();
+  }
+
+  @override
+  void dispose() {
+    _hotspotController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -157,6 +175,193 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     }
   }
 
+  // ── 热点资讯方法 ──
+
+  EmAiApi _getHotspotApi() {
+    final apiKey = ref.read(settingsProvider).emApiKey;
+    return EmAiApi(apiKey: apiKey);
+  }
+
+  Future<void> _loadHotspot() async {
+    final query = _hotspotController.text.trim();
+    if (query.isEmpty) return;
+    setState(() => _hotspotLoading = true);
+    try {
+      final result = await _getHotspotApi().getHotspot(question: query);
+      setState(() {
+        _hotspotMarkdown = result;
+        _hotspotItems = _parseHotspotItems(result);
+        _hotspotLoading = false;
+      });
+    } catch (e) {
+      setState(() => _hotspotLoading = false);
+    }
+  }
+
+  List<HotspotItem> _parseHotspotItems(String markdown) {
+    if (markdown.isEmpty || markdown.startsWith('查询失败') || markdown.startsWith('暂无')) return [];
+    final items = <HotspotItem>[];
+    final sections = markdown.split(RegExp(r'(?=\n?\d+[\.\、\）\)]\s)', multiLine: true));
+    for (final section in sections) {
+      final trimmed = section.trim();
+      if (trimmed.isEmpty) continue;
+      final rankMatch = RegExp(r'^(\d+)[\.\、\）\)]').firstMatch(trimmed);
+      if (rankMatch == null) continue;
+      final rank = int.tryParse(rankMatch.group(1) ?? '0') ?? 0;
+      final titleMatch = RegExp(r'\*\*(.+?)\*\*').firstMatch(trimmed);
+      final title = titleMatch?.group(1)?.trim() ?? trimmed.substring(0, trimmed.length.clamp(0, 50));
+      final timeMatch = RegExp(r'(\d{1,2}:\d{2})').firstMatch(trimmed);
+      final time = timeMatch?.group(1) ?? '';
+      var content = trimmed;
+      if (titleMatch != null) {
+        content = trimmed.substring(titleMatch.end).trim();
+        if (content.startsWith('-') || content.startsWith('：') || content.startsWith(':')) {
+          content = content.substring(1).trim();
+        }
+      }
+      if (content.isEmpty) content = title;
+      items.add(HotspotItem(rank: rank, title: title, content: content, time: time));
+    }
+    if (items.isEmpty && markdown.trim().isNotEmpty) {
+      items.add(HotspotItem(rank: 1, title: '热点资讯', content: markdown, time: ''));
+    }
+    return items;
+  }
+
+  Color _rankColor(int rank) {
+    switch (rank) {
+      case 1: return AppColors.up;
+      case 2: return const Color(0xFFFF6D00);
+      case 3: return const Color(0xFFFFA000);
+      default: return AppColors.textSecondary;
+    }
+  }
+
+  void _showHotspotDetail(HotspotItem item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.cardBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (ctx, scrollController) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28, height: 28,
+                    decoration: BoxDecoration(
+                      color: _rankColor(item.rank).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text('${item.rank}', style: TextStyle(color: _rankColor(item.rank), fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(item.title, style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: AppColors.divider),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(16),
+                child: MarkdownCard(markdown: item.content),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _saveHotspotToHistory() {
+    if (_hotspotMarkdown.isEmpty || _hotspotMarkdown.startsWith('查询失败') || _hotspotMarkdown.startsWith('暂无')) return;
+    final record = AiQueryRecord(
+      id: const Uuid().v4(),
+      type: 'hotspot',
+      query: _hotspotController.text.trim(),
+      resultMarkdown: _hotspotMarkdown,
+      timestamp: DateTime.now(),
+    );
+    _hotspotStorage.saveRecord(record);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: const Text('已保存到历史'), backgroundColor: AppColors.success, duration: const Duration(seconds: 1)),
+    );
+  }
+
+  void _showHotspotHistory() async {
+    final records = await _hotspotStorage.loadHistory(type: 'hotspot');
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.cardBackground,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6, maxChildSize: 0.9, minChildSize: 0.3, expand: false,
+        builder: (ctx, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.history, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Text('查询历史', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  if (records.isNotEmpty)
+                    TextButton(
+                      onPressed: () async { await _hotspotStorage.clearHistory(); if (ctx.mounted) Navigator.pop(ctx); },
+                      child: Text('清空', style: TextStyle(color: AppColors.down)),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: records.isEmpty
+                  ? Center(child: Text('暂无历史记录', style: TextStyle(color: AppColors.textSecondary)))
+                  : ListView.builder(
+                      controller: scrollController,
+                      itemCount: records.length,
+                      itemBuilder: (ctx, i) {
+                        final r = records[i];
+                        return ListTile(
+                          title: Text(r.query, style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                          subtitle: Text('${r.timestamp.month}/${r.timestamp.day} ${r.timestamp.hour}:${r.timestamp.minute.toString().padLeft(2, '0')}', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          trailing: Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            setState(() {
+                              _hotspotController.text = r.query;
+                              _hotspotMarkdown = r.resultMarkdown;
+                              _hotspotItems = _parseHotspotItems(r.resultMarkdown);
+                            });
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -182,6 +387,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                     _buildSectionTitle('功能入口'),
                     const SizedBox(height: 8),
                     _buildFunctionGrid(),
+                    const SizedBox(height: 16),
+                  ],
+                  if (settings.enableHotspot) ...[
+                    _buildSectionTitle('市场热点'),
+                    const SizedBox(height: 8),
+                    _buildHotspotSection(),
                     const SizedBox(height: 16),
                   ],
                   _buildSectionTitle('大盘指数'),
@@ -382,8 +593,6 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       ('资金流向', Icons.account_balance, AppColors.ma60, () => const FundFlowScreen()),
       if (settings.enableAi)
         ('AI 助手', Icons.smart_toy, AppColors.primary, () => const AiChatScreen()),
-      if (settings.enableHotspot)
-        ('市场热点', Icons.whatshot, AppColors.up, () => const HotspotScreen()),
       if (settings.enablePeerCompare)
         ('同业对比', Icons.bar_chart, AppColors.ma20, () => const ComparableCompanyScreen()),
     ];
@@ -427,6 +636,133 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildHotspotSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 搜索栏 + 快捷标签
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _hotspotController,
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: '输入查询内容...',
+                    hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    filled: true,
+                    fillColor: AppColors.surface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _loadHotspot(),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _buildHotspotChip('今日热点'),
+              const SizedBox(width: 4),
+              _buildHotspotChip('A股热点'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // 热点列表
+          if (_hotspotLoading)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+            )
+          else if (_hotspotItems.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(child: Text('暂无热点数据', style: TextStyle(color: AppColors.textSecondary, fontSize: 12))),
+            )
+          else
+            ...(_hotspotItems.take(8).map((item) => _buildHotspotItem(item))),
+          // 底部按钮
+          if (_hotspotItems.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _saveHotspotToHistory,
+                    icon: Icon(Icons.bookmark_add, size: 14, color: AppColors.primary),
+                    label: Text('保存记录', style: TextStyle(color: AppColors.primary, fontSize: 11)),
+                    style: OutlinedButton.styleFrom(side: BorderSide(color: AppColors.primary), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _showHotspotHistory,
+                    icon: Icon(Icons.history, size: 14, color: AppColors.textSecondary),
+                    label: Text('查看历史', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                    style: OutlinedButton.styleFrom(side: BorderSide(color: AppColors.divider), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHotspotChip(String label) {
+    return ActionChip(
+      label: Text(label, style: TextStyle(color: AppColors.primary, fontSize: 11)),
+      backgroundColor: AppColors.primary.withOpacity(0.1),
+      side: BorderSide.none,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      onPressed: () {
+        _hotspotController.text = label;
+        _loadHotspot();
+      },
+    );
+  }
+
+  Widget _buildHotspotItem(HotspotItem item) {
+    final color = _rankColor(item.rank);
+    return InkWell(
+      onTap: () => _showHotspotDetail(item),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 24, height: 24,
+              decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+              alignment: Alignment.center,
+              child: Text('${item.rank}', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item.title.length > 20 ? '${item.title.substring(0, 20)}...' : item.title,
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (item.time.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(item.time, style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
