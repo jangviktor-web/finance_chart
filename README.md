@@ -14,11 +14,9 @@
 ## 应用截图
 
 <p align="center">
-  <img src="screenshots/app-screenshot-1.jpg" alt="策盈 QuantWin 行情与技术分析" width="100%">
-</p>
-<p align="center">
-  <img src="screenshots/app-screenshot-2.jpg" alt="策盈 QuantWin 策略回测与发现" width="100%">
-</p>
+<img width="4000" height="2160" alt="微信图片_20260525100307_31_134" src="https://github.com/user-attachments/assets/15cd2a67-d54d-4280-accf-25fcae67e8b5" />
+
+<img width="4000" height="2160" alt="微信图片_20260525100308_32_134" src="https://github.com/user-attachments/assets/c8b65bb0-c019-487e-b15c-ffc9e022bfbc" />
 
 ---
 
