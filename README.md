@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="screenshots/app-logo.png" alt="策盈 QuantWin Logo" width="160">
+
 # 策盈 QuantWin
 
 ### 📈 A股量化分析 Android APP · 股票技术分析 · AI 智能选股
