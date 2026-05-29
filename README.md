@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="screenshots/app-logo.png" alt="策盈 QuantWin Logo" width="160">
+<img src="[screenshots/app-logo.png](https://github.com/user-attachments/assets/31a929d5-27ac-43cc-92d0-75330cafb14c)" alt="策盈 QuantWin Logo" width="160">
+
+
 
 # 策盈 QuantWin
 
