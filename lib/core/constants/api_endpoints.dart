@@ -51,4 +51,11 @@ class ApiEndpoints {
   static const String valuation = '$eastmoneyBase/api/data/v1/get';
   static const String blockTrades = '$eastmoneyBase/api/data/v1/get';
   static const String restrictedShares = '$eastmoneyBase/api/data/v1/get';
+
+  // ── 公告 ──
+  static const String announcements = 'https://np-anotice-stock.eastmoney.com/api/security/ann';
+  static const String announcementContent = 'https://np-cnotice-stock.eastmoney.com/api/content/ann';
+
+  // ── 板块成分股 ──
+  static const String boardStocks = '$eastmoneyPush/api/qt/clist/get';
 }

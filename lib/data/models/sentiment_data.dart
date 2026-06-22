@@ -268,3 +268,43 @@ class DragonTigerStatItem {
     this.latestChange = 0,
   });
 }
+
+/// 个股公告条目
+class AnnouncementItem {
+  final String artCode;       // 公告唯一编号
+  final String title;         // 标题
+  final DateTime publishTime; // 发布时间
+  final List<String> stockCodes; // 关联股票代码
+  final String eventType;     // 事件类型: earnings/dividend/insider/notice等
+  final int importance;       // 重要性 0-3
+  final String url;           // 原文链接
+
+  const AnnouncementItem({
+    required this.artCode,
+    required this.title,
+    required this.publishTime,
+    this.stockCodes = const [],
+    this.eventType = 'notice',
+    this.importance = 0,
+    this.url = '',
+  });
+}
+
+/// 板块成分股条目
+class BoardStockItem {
+  final String code;
+  final String name;
+  final double price;
+  final double changePercent;
+  final double turnover;      // 成交额
+  final double volume;        // 成交量
+
+  const BoardStockItem({
+    required this.code,
+    required this.name,
+    this.price = 0,
+    this.changePercent = 0,
+    this.turnover = 0,
+    this.volume = 0,
+  });
+}

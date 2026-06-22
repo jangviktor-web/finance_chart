@@ -276,6 +276,101 @@ class NewsApi {
     }
   }
 
+  /// 东方财富个股新闻搜索（按名称搜索，效果优于代码）
+  /// PanWatch 模式：用股票名称搜索，支持行业/主题关键词
+  Future<List<NewsItem>> searchNewsByName(String keyword, {int page = 1, int pageSize = 15}) async {
+    await RateLimiter.instance.wait('search-api-web.eastmoney.com');
+    try {
+      final cb = 'jQuery_${DateTime.now().millisecondsSinceEpoch}';
+      final params = {
+        'cb': cb,
+        'param': json.encode({
+          'uid': '',
+          'keyword': keyword,
+          'type': ['cmsArticleWebOld'],
+          'client': 'web',
+          'clientType': 'web',
+          'clientVersion': 'curr',
+          'param': {
+            'cmsArticleWebOld': {
+              'searchScope': 'default',
+              'sort': 'default',
+              'pageIndex': page,
+              'pageSize': pageSize,
+              'preTag': '',
+              'postTag': '',
+            }
+          }
+        }),
+      };
+
+      final response = await _dio.get(ApiEndpoints.newsSearch, queryParameters: params);
+      var body = response.data is String ? response.data as String : json.encode(response.data);
+
+      // 去掉 JSONP 包裹
+      final jsonStart = body.indexOf('(');
+      final jsonEnd = body.lastIndexOf(')');
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        body = body.substring(jsonStart + 1, jsonEnd);
+      }
+
+      return _parseSearchResults(body);
+    } catch (e) {
+      AppLog.instance.warn('NewsApi', 'searchNewsByName($keyword) 失败: $e');
+      return [];
+    }
+  }
+
+  /// 按关键词搜索新闻（行业/主题词，如"新能源汽车""半导体"）
+  Future<List<NewsItem>> searchNewsByTheme(String theme, {int page = 1, int pageSize = 15}) async {
+    return searchNewsByName(theme, page: page, pageSize: pageSize);
+  }
+
+  /// 个股公告查询（批量）
+  Future<List<Map<String, dynamic>>> getStockAnnouncements(List<String> codes, {int limit = 20}) async {
+    if (codes.isEmpty) return [];
+    final aShareCodes = codes.where((c) => c.length == 6 && int.tryParse(c) != null).toList();
+    if (aShareCodes.isEmpty) return [];
+
+    await RateLimiter.instance.wait('np-anotice-stock.eastmoney.com');
+    try {
+      final params = {
+        'sr': '-1',
+        'page_size': '$limit',
+        'page_index': '1',
+        'ann_type': 'A',
+        'stock_list': aShareCodes.join(','),
+        'f_node': '0',
+        's_node': '0',
+      };
+
+      final response = await _dio.get(
+        'https://np-anotice-stock.eastmoney.com/api/security/ann',
+        queryParameters: params,
+        options: Options(headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        }),
+      );
+      final data = response.data is String ? json.decode(response.data) : response.data;
+
+      if (data['success'] != true) return [];
+      final items = data['data']?['list'] as List? ?? [];
+
+      return items.map((item) {
+        return {
+          'artCode': item['art_code']?.toString() ?? '',
+          'title': item['title']?.toString() ?? '',
+          'time': item['notice_date']?.toString() ?? '',
+          'codes': (item['codes'] as List? ?? []).map((c) => c['stock_code']?.toString() ?? '').where((s) => s.isNotEmpty).toList(),
+          'url': 'https://data.eastmoney.com/notices/detail/${aShareCodes.isNotEmpty ? aShareCodes.first : ''}/${item['art_code']}.html',
+        };
+      }).toList();
+    } catch (e) {
+      AppLog.instance.warn('NewsApi', 'getStockAnnouncements 失败: $e');
+      return [];
+    }
+  }
+
   List<NewsItem> _parseSearchResults(String body) {
     try {
       final data = json.decode(body);

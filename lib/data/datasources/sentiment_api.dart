@@ -643,6 +643,148 @@ class SentimentApi {
     }
   }
 
+  // ──────────── 公告 API（PanWatch 模式）────────────
+
+  /// 个股公告 — 批量查询（单次请求覆盖多只股票）
+  Future<List<AnnouncementItem>> getAnnouncements(List<String> codes, {int limit = 50}) async {
+    if (codes.isEmpty) return [];
+
+    // 只处理 A 股代码
+    final aShareCodes = codes.where((c) => c.length == 6 && int.tryParse(c) != null).toList();
+    if (aShareCodes.isEmpty) return [];
+
+    await RateLimiter.instance.wait('np-anotice-stock.eastmoney.com');
+    try {
+      final params = {
+        'sr': '-1',
+        'page_size': '$limit',
+        'page_index': '1',
+        'ann_type': 'A',
+        'stock_list': aShareCodes.join(','),
+        'f_node': '0',
+        's_node': '0',
+      };
+
+      final response = await _dio.get(
+        ApiEndpoints.announcements,
+        queryParameters: params,
+        options: Options(headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        }),
+      );
+      final data = response.data is String ? json.decode(response.data) : response.data;
+
+      if (data['success'] != true) return [];
+      final items = data['data']?['list'] as List? ?? [];
+
+      return items.map((item) {
+        final artCode = item['art_code']?.toString() ?? '';
+        final title = item['title']?.toString() ?? '';
+        if (artCode.isEmpty || title.isEmpty) return null;
+
+        // 解析时间
+        DateTime publishTime = DateTime.now();
+        final noticeDate = item['notice_date']?.toString() ?? '';
+        if (noticeDate.isNotEmpty) {
+          publishTime = DateTime.tryParse(noticeDate) ?? DateTime.now();
+        }
+
+        // 提取关联股票代码
+        final stockCodes = <String>[];
+        final codes = item['codes'] as List? ?? [];
+        for (final c in codes) {
+          final code = c['stock_code']?.toString() ?? '';
+          if (code.isNotEmpty) stockCodes.add(code);
+        }
+        if (stockCodes.isEmpty && aShareCodes.isNotEmpty) {
+          stockCodes.add(aShareCodes.first);
+        }
+
+        // 判断事件类型和重要性
+        final eventType = _guessEventType(title);
+        final importance = _guessImportance(title);
+
+        return AnnouncementItem(
+          artCode: artCode,
+          title: title,
+          publishTime: publishTime,
+          stockCodes: stockCodes,
+          eventType: eventType,
+          importance: importance,
+          url: 'https://data.eastmoney.com/notices/detail/${stockCodes.isNotEmpty ? stockCodes.first : ''}/$artCode.html',
+        );
+      }).whereType<AnnouncementItem>().toList();
+    } catch (e) {
+      AppLog.instance.error('SentimentApi', 'getAnnouncements 失败: $e');
+      return [];
+    }
+  }
+
+  /// 板块成分股 — 查询指定板块(BK代码)下的个股列表
+  Future<List<BoardStockItem>> getBoardStocks(String boardCode, {int limit = 30}) async {
+    if (boardCode.isEmpty) return [];
+
+    // boardCode 可能是 "BK0477" 或 "0477" 格式
+    final code = boardCode.startsWith('BK') ? boardCode : 'BK$boardCode';
+
+    final params = {
+      'pn': '1',
+      'pz': '$limit',
+      'po': '1',
+      'np': '1',
+      'fltt': '2',
+      'invt': '2',
+      'fid': 'f3',
+      'fs': 'b:$code',
+      'fields': 'f2,f3,f5,f6,f12,f14',
+    };
+
+    try {
+      final response = await _push2Retry(ApiEndpoints.boardStocks, params);
+      final data = response.data is String ? json.decode(response.data) : response.data;
+
+      if (data['data'] == null) return [];
+      final rows = (data['data']['diff'] as List?) ?? [];
+
+      return rows.map((item) {
+        final stockCode = (item['f12'] ?? '').toString();
+        final market = item['f13'] == 1 ? 'sh' : 'sz';
+        return BoardStockItem(
+          code: '$market$stockCode',
+          name: item['f14']?.toString() ?? '',
+          price: _toDouble(item['f2']),
+          changePercent: _toDouble(item['f3']),
+          volume: _toDouble(item['f5']),
+          turnover: _toDouble(item['f6']),
+        );
+      }).toList();
+    } catch (e) {
+      AppLog.instance.error('SentimentApi', 'getBoardStocks 失败: $e');
+      return [];
+    }
+  }
+
+  /// 根据标题关键词猜测公告事件类型
+  String _guessEventType(String title) {
+    if (RegExp(r'业绩预告|业绩快报|年报|半年报|季报|三季报|一季报').hasMatch(title)) return 'earnings';
+    if (RegExp(r'分红|派息|除权|除息|送转|股权登记').hasMatch(title)) return 'dividend';
+    if (RegExp(r'停牌|复牌').hasMatch(title)) return 'suspension';
+    if (RegExp(r'回购|股份回购').hasMatch(title)) return 'repurchase';
+    if (RegExp(r'增发|配股|定向增发|发行').hasMatch(title)) return 'financing';
+    if (RegExp(r'减持|增持|股东|董监高|持股变动').hasMatch(title)) return 'insider';
+    if (RegExp(r'诉讼|仲裁|立案|处罚|监管|问询函').hasMatch(title)) return 'regulatory';
+    if (RegExp(r'重组|并购|收购|出售资产|重大资产').hasMatch(title)) return 'restructuring';
+    return 'notice';
+  }
+
+  /// 根据标题关键词判断公告重要性 (0-3)
+  int _guessImportance(String title) {
+    if (RegExp(r'重大|业绩预告|业绩快报|年报|半年报|重组|停牌|复牌').hasMatch(title)) return 3;
+    if (RegExp(r'季报|分红|回购|增持|减持|问询函|处罚').hasMatch(title)) return 2;
+    if (RegExp(r'临时|快讯').hasMatch(title)) return 1;
+    return 0;
+  }
+
   double _toDouble(dynamic v) {
     if (v == null) return 0;
     if (v is num) return v.toDouble();

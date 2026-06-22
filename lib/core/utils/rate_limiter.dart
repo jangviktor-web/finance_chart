@@ -2,6 +2,7 @@ import 'dart:async';
 
 /// 全局请求频率控制器
 /// 按域名分组：最小请求间隔 + 每日调用次数上限 + 指数退避
+/// + 失败负缓存(冷却期) + 动态TTL(交易/收盘) + 请求合并
 class RateLimiter {
   RateLimiter._();
   static final instance = RateLimiter._();
@@ -18,6 +19,8 @@ class RateLimiter {
     'np-listapi.eastmoney.com': 500,    // 新闻
     'searchapi.eastmoney.com': 300,     // 搜索
     'search-api-web.eastmoney.com': 300,// 新闻搜索
+    'np-anotice-stock.eastmoney.com': 500, // 公告
+    'np-cnotice-stock.eastmoney.com': 500, // 公告全文
     // 腾讯
     'qt.gtimg.cn': 250,                 // 行情
     'web.ifzq.gtimg.cn': 250,          // K线
@@ -44,6 +47,8 @@ class RateLimiter {
     'np-listapi.eastmoney.com': 300,
     'searchapi.eastmoney.com': 300,
     'search-api-web.eastmoney.com': 200,
+    'np-anotice-stock.eastmoney.com': 200,
+    'np-cnotice-stock.eastmoney.com': 200,
     // 腾讯
     'qt.gtimg.cn': 2000,
     'web.ifzq.gtimg.cn': 500,
@@ -69,6 +74,16 @@ class RateLimiter {
   final _dailyCounts = <String, int>{};
   // 当前日期（用于每日重置）
   DateTime _currentDate = _today();
+
+  // ── 失败负缓存：失败后冷却期内不再重试 ──
+  // key: "domain:cacheKey", value: 冷却截止时间
+  final _failCooldown = <String, DateTime>{};
+  // 交易时段冷却: 60s, 收盘后冷却: 900s
+  static const _cooldownTradingSeconds = 60;
+  static const _cooldownClosedSeconds = 900;
+
+  // ── 请求合并：相同 cacheKey 的并发请求只发一次 ──
+  final _pendingRequests = <String, Future<dynamic>>{};
 
   static DateTime _today() {
     final now = DateTime.now();
@@ -156,6 +171,55 @@ class RateLimiter {
   /// 重置指定域名的封禁状态
   void resetBlock(String domain) {
     _failCounts.remove(domain);
+  }
+
+  // ── 失败负缓存：冷却期内返回 true，表示不应重试 ──
+
+  /// 检查指定 cacheKey 是否在失败冷却期内
+  bool isInCooldown(String domain, String cacheKey) {
+    final key = '$domain:$cacheKey';
+    final cooldown = _failCooldown[key];
+    if (cooldown == null) return false;
+    if (DateTime.now().isBefore(cooldown)) return true;
+    _failCooldown.remove(key);
+    return false;
+  }
+
+  /// 设置失败冷却期（根据是否交易时段决定冷却时长）
+  void setCooldown(String domain, String cacheKey) {
+    // 交易时段 9:30-15:00 周一到周五 用短冷却
+    final now = DateTime.now();
+    final isWeekday = now.weekday <= 5;
+    final hour = now.hour;
+    final minute = now.minute;
+    final timeMinutes = hour * 60 + minute;
+    final isTradingHours = isWeekday && timeMinutes >= 570 && timeMinutes < 900; // 9:30-15:00
+
+    final cooldownSeconds = isTradingHours ? _cooldownTradingSeconds : _cooldownClosedSeconds;
+    _failCooldown['$domain:$cacheKey'] = DateTime.now().add(Duration(seconds: cooldownSeconds));
+  }
+
+  /// 清除指定 cacheKey 的冷却状态
+  void clearCooldown(String domain, String cacheKey) {
+    _failCooldown.remove('$domain:$cacheKey');
+  }
+
+  // ── 请求合并：相同 cacheKey 的并发请求只发一次 ──
+
+  /// 合并相同 cacheKey 的并发请求
+  /// 如果已有相同 key 的请求在进行中，返回同一个 Future；否则执行新请求
+  Future<T> coalesceRequest<T>(String cacheKey, Future<T> Function() request) async {
+    final pending = _pendingRequests[cacheKey];
+    if (pending != null) {
+      return pending as Future<T>;
+    }
+    final future = request();
+    _pendingRequests[cacheKey] = future;
+    try {
+      return await future;
+    } finally {
+      _pendingRequests.remove(cacheKey);
+    }
   }
 
   /// 获取所有域名状态（用于调试/设置页显示）
