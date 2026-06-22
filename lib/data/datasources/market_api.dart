@@ -175,13 +175,19 @@ class MarketApi {
     required String code,
     String period = 'day',
     int count = 200,
+    bool forceRefresh = false,
   }) async {
-    // 分钟线缓存5分钟，日线缓存4小时
     final isMinute = period.endsWith('m');
-    final cacheTtl = isMinute ? CacheManager.ttlKline : const Duration(hours: 4);
+    // 动态 TTL：交易时段短，收盘后长
+    final cacheTtl = isMinute ? CacheManager.klineMinuteTtl : CacheManager.klineDayTtl;
     final cacheKey = 'kline_${code}_${period}_$count';
-    final cached = CacheManager.instance.get<List<KlineData>>(cacheKey);
-    if (cached != null && cached.isNotEmpty) return cached;
+
+    if (!forceRefresh) {
+      final cached = CacheManager.instance.get<List<KlineData>>(cacheKey);
+      if (cached != null && cached.isNotEmpty) return cached;
+    } else {
+      CacheManager.instance.remove(cacheKey);
+    }
 
     Future<List<KlineData>> _fetch() async {
       if (klineSource == DataSourceType.eastmoney) {

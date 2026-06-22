@@ -70,7 +70,12 @@ class _KlineChartWidgetState extends State<KlineChartWidget> with TickerProvider
   @override
   void didUpdateWidget(covariant KlineChartWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.klines.length != widget.klines.length) {
+    // 比较 klines 内容而非仅长度（数据更新但长度不变时也需刷新）
+    final lengthChanged = oldWidget.klines.length != widget.klines.length;
+    final contentChanged = !lengthChanged && widget.klines.isNotEmpty &&
+        oldWidget.klines.isNotEmpty &&
+        oldWidget.klines.last.close != widget.klines.last.close;
+    if (lengthChanged || contentChanged) {
       _updateVisibleRange();
     }
   }

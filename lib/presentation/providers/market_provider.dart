@@ -83,7 +83,7 @@ class KlineNotifier extends StateNotifier<MarketState> {
     load();
   }
 
-  Future<void> load({String period = 'day', int count = 200}) async {
+  Future<void> load({String period = 'day', int count = 200, bool forceRefresh = false}) async {
     state = state.copyWith(isLoading: true, clearError: true, period: period);
 
     try {
@@ -92,7 +92,7 @@ class KlineNotifier extends StateNotifier<MarketState> {
       final params = _ref.read(indicatorParamsProvider);
 
       final realtimeFuture = repo.getRealtime(code);
-      final klineFuture = repo.getKline(code: code, period: period, count: count);
+      final klineFuture = repo.getKline(code: code, period: period, count: count, forceRefresh: forceRefresh);
 
       final quote = await realtimeFuture;
       final klines = await klineFuture;

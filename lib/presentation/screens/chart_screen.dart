@@ -35,7 +35,7 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
 
   void _onPeriodChanged(String period) {
     setState(() => _selectedPeriod = period);
-    ref.read(klineProvider(widget.stockCode).notifier).load(period: period);
+    ref.read(klineProvider(widget.stockCode).notifier).load(period: period, forceRefresh: true);
   }
 
   void _onIndicatorChanged(String indicator) {
@@ -367,7 +367,7 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(klineProvider(widget.stockCode).notifier).load(period: _selectedPeriod),
+            onPressed: () => ref.read(klineProvider(widget.stockCode).notifier).load(period: _selectedPeriod, forceRefresh: true),
           ),
         ],
       ),
@@ -376,7 +376,7 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
           : state.error != null
               ? AppErrorWidget(
                   message: state.error!,
-                  onRetry: () => ref.read(klineProvider(widget.stockCode).notifier).load(period: _selectedPeriod),
+                  onRetry: () => ref.read(klineProvider(widget.stockCode).notifier).load(period: _selectedPeriod, forceRefresh: true),
                 )
               : _buildChartContent(state),
     );

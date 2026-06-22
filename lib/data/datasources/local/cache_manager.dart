@@ -7,13 +7,29 @@ class CacheManager {
   final _cache = <String, _CacheEntry>{};
 
   // ── 预设 TTL ──
-  static const ttlKline = Duration(minutes: 5);       // K线数据
+  static const ttlKline = Duration(minutes: 5);       // K线数据（默认）
   static const ttlRealtime = Duration(seconds: 30);    // 实时行情
   static const ttlSentiment = Duration(minutes: 10);   // 情绪面数据
   static const ttlMacro = Duration(hours: 1);          // 宏观数据
   static const ttlNews = Duration(minutes: 2);         // 新闻
   static const ttlSearch = Duration(minutes: 5);       // 搜索结果
   static const ttlAi = Duration(minutes: 30);          // AI 诊断结果
+
+  // ── 动态 TTL（根据交易时段调整）──
+  static Duration get klineMinuteTtl {
+    return _isTradingHours() ? const Duration(seconds: 30) : const Duration(minutes: 5);
+  }
+
+  static Duration get klineDayTtl {
+    return _isTradingHours() ? const Duration(seconds: 60) : const Duration(minutes: 30);
+  }
+
+  static bool _isTradingHours() {
+    final now = DateTime.now();
+    if (now.weekday > 5) return false; // 周末
+    final t = now.hour * 60 + now.minute;
+    return (t >= 570 && t < 690) || (t >= 780 && t < 900); // 9:30-11:30, 13:00-15:00
+  }
 
   /// 获取缓存，不存在或已过期返回 null
   T? get<T>(String key) {

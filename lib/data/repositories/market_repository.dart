@@ -32,8 +32,9 @@ class MarketRepository {
     required String code,
     String period = 'day',
     int count = 200,
+    bool forceRefresh = false,
   }) {
-    return _marketApi.getKline(code: code, period: period, count: count);
+    return _marketApi.getKline(code: code, period: period, count: count, forceRefresh: forceRefresh);
   }
 
   /// 搜索股票

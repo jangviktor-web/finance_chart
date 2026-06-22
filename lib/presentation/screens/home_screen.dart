@@ -509,7 +509,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onRefresh: () async {
                       // 刷新当前分组所有股票行情
                       for (final code in currentGroup.codes) {
-                        ref.read(klineProvider(code).notifier).load(period: 'day');
+                        ref.read(klineProvider(code).notifier).load(period: 'day', forceRefresh: true);
                       }
                       // 等待所有刷新完成
                       await Future.delayed(const Duration(seconds: 1));
