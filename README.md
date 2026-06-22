@@ -37,12 +37,13 @@
 
 <div align="center">
 
-[![Latest APK](https://img.shields.io/badge/下载_v1.7.3-APK-E53935?style=for-the-badge&logo=android)](https://github.com/jangviktor-web/finance_chart/releases/download/v1.7.3/app-release.apk)
+[![Latest APK](https://img.shields.io/badge/下载_v1.8.2-APK-E53935?style=for-the-badge&logo=android)](https://github.com/jangviktor-web/finance_chart/releases/download/v1.8.2/app-release.apk)
 
 </div>
 
 | 版本 | 日期 | 更新内容 |
 |:---:|:---:|---|
+| **v1.8.2** | 2026-06-22 | K 线缓存优化 · 强制刷新 · 实时重绘 · 公告 · 板块成分股 · 按名称搜索 |
 | **v1.7.3** | 2026-05-22 | 发现页内嵌热点列表 · API Key XOR 加密存储 · 脱敏显示 |
 | **v1.7.1** | 2026-05-22 | 全 API 频率限制 · 每日调用上限 · 宏观数据缓存 |
 | **v1.7.0** | 2026-05-21 | 搜索联想 · 回测时间区间 · WebView · 宏观扩展 |
