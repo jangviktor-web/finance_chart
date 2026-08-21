@@ -164,39 +164,39 @@ class BackendApi {
 
   // ──────────── 底层请求 ────────────
 
-  Future<Map<String, dynamic>> _get(String path) async {
-    try {
-      final response = await _dio.get('$_baseUrl$path');
-      final data = response.data is String
-          ? json.decode(response.data as String)
-          : response.data;
-
-      if (data is Map<String, dynamic> && data.containsKey('code')) {
-        if (data['code'] != 0) {
-          throw ApiException(
-            data['message']?.toString() ?? '后端错误',
-            statusCode: data['code'] as int?,
-            source: path,
-          );
-        }
-        return data['data'] as Map<String, dynamic>? ?? {};
-      }
-
-      return data as Map<String, dynamic>;
-    } on DioException catch (e) {
-      throw NetworkException(
-        '后端请求失败: ${e.message}',
-        source: path,
-      );
-    }
+  Future<Map<String, dynamic>> _get(String path) {
+    return _request('GET', path);
   }
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) {
+    return _request('POST', path, body: body);
+  }
+
+  Future<Map<String, dynamic>> _request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
     try {
-      final response = await _dio.post('$_baseUrl$path', data: body);
-      final data = response.data is String
-          ? json.decode(response.data as String)
-          : response.data;
+      final response = switch (method) {
+        'GET' => await _dio.get('$_baseUrl$path'),
+        'POST' => await _dio.post('$_baseUrl$path', data: body),
+        _ => throw ArgumentError('不支持的请求方法: $method'),
+      };
+
+      final Object? data;
+      try {
+        data = response.data is String
+            ? json.decode(response.data as String)
+            : response.data;
+      } on FormatException catch (e, stack) {
+        throw ParseException(
+          '后端响应不是合法 JSON: ${e.message}',
+          source: path,
+          error: e,
+          stackTrace: stack,
+        );
+      }
 
       if (data is Map<String, dynamic> && data.containsKey('code')) {
         if (data['code'] != 0) {
@@ -210,10 +210,13 @@ class BackendApi {
       }
 
       return data as Map<String, dynamic>;
-    } on DioException catch (e) {
+    } on DioException catch (e, stackTrace) {
+      // 保留原始异常与栈，便于排障与分类重试
       throw NetworkException(
         '后端请求失败: ${e.message}',
         source: path,
+        error: e,
+        stackTrace: stackTrace,
       );
     }
   }

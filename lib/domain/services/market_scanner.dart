@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../data/models/kline_data.dart';
 import '../../data/models/scan_result.dart';
-import '../../data/datasources/market_api.dart';
 import '../../data/repositories/market_repository.dart';
 import '../../core/utils/rate_limiter.dart';
 

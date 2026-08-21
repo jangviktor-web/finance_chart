@@ -210,31 +210,6 @@ class IndicatorCalculator {
     return result;
   }
 
-  // SMA 简单移动平均（中国式，带权重）
-  List<double> _sma(List<double> data, int period, [double weight = 1]) {
-    if (data.isEmpty) return [];
-    final result = List<double>.filled(data.length, 0);
-    result[0] = data[0];
-    for (int i = 1; i < data.length; i++) {
-      result[i] = (weight * data[i] + (period - weight) * result[i - 1]) / period;
-    }
-    return result;
-  }
-
-  // 标准差
-  List<double> _std(List<double> data, int period) {
-    final result = List<double>.filled(data.length, 0);
-    for (int i = period - 1; i < data.length; i++) {
-      double sum = 0;
-      for (int j = i - period + 1; j <= i; j++) sum += data[j];
-      final avg = sum / period;
-      double varSum = 0;
-      for (int j = i - period + 1; j <= i; j++) varSum += (data[j] - avg) * (data[j] - avg);
-      result[i] = sqrt(varSum / period);
-    }
-    return result;
-  }
-
   // ════════════════════════════════════════════
   //  基础指标 (已有)
   // ════════════════════════════════════════════
@@ -673,4 +648,16 @@ class IndicatorCalculator {
     final ma4 = ma(closes, 56);
     return {'a': ma1, 'b': ma2, 'c': ma3, 'd': ma4};
   }
+}
+
+/// 供 [compute]/[Isolate.run] 在后台 isolate 执行的指标计算入口（P0-3）。
+/// 纯数据进出：KlineData/IndicatorParams 均为可跨 isolate 发送的普通数据类。
+IndicatorData calculateIndicatorsIsolate(
+  ({List<KlineData> klines, IndicatorParams params, Set<String>? requested}) job,
+) {
+  return IndicatorCalculator().calculateAll(
+    job.klines,
+    params: job.params,
+    requestedIndicators: job.requested,
+  );
 }

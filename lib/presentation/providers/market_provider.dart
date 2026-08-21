@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/market_api.dart';
 import '../../data/datasources/search_api.dart';
@@ -70,25 +71,36 @@ class MarketState {
   }
 }
 
-/// K 线数据 Provider（按 code 缓存）
-final klineProvider = StateNotifierProvider.family<KlineNotifier, MarketState, String>((ref, code) {
+/// K 线数据 Provider（按 code 缓存，autoDispose 防止状态无限驻留）
+final klineProvider = StateNotifierProvider.autoDispose.family<KlineNotifier, MarketState, String>((ref, code) {
   return KlineNotifier(ref, code);
 });
 
 class KlineNotifier extends StateNotifier<MarketState> {
   final Ref _ref;
   final String code;
+  bool _disposed = false;
 
   KlineNotifier(this._ref, this.code) : super(MarketState()) {
     load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  /// 守卫：autoDispose 后不再写入已销毁的 notifier
+  void _updateState(MarketState next) {
+    if (!_disposed) state = next;
+  }
+
   Future<void> load({String period = 'day', int count = 200, bool forceRefresh = false}) async {
-    state = state.copyWith(isLoading: true, clearError: true, period: period);
+    _updateState(state.copyWith(isLoading: true, clearError: true, period: period));
 
     try {
       final repo = _ref.read(marketRepositoryProvider);
-      final calculator = _ref.read(indicatorCalculatorProvider);
       final params = _ref.read(indicatorParamsProvider);
 
       final realtimeFuture = repo.getRealtime(code);
@@ -96,42 +108,44 @@ class KlineNotifier extends StateNotifier<MarketState> {
 
       final quote = await realtimeFuture;
       final klines = await klineFuture;
-      final indicators = calculator.calculateAll(klines, params: params);
+      // P0-3: 指标计算移入后台 isolate，避免主线程卡顿
+      final indicators = await compute(
+        calculateIndicatorsIsolate,
+        (klines: klines, params: params, requested: null),
+      );
 
-      state = state.copyWith(
+      _updateState(state.copyWith(
         quote: quote,
         klines: klines,
         indicators: indicators,
         isLoading: false,
         period: period,
-      );
+      ));
     } catch (e) {
-      state = state.copyWith(
+      _updateState(state.copyWith(
         isLoading: false,
         error: e.toString(),
-      );
+      ));
     }
   }
 
   /// 用新参数重新计算指标（不重新拉数据）
-  void recalculateIndicators(IndicatorParams params) {
+  Future<void> recalculateIndicators(IndicatorParams params) async {
     if (state.klines.isEmpty) return;
-    final calculator = _ref.read(indicatorCalculatorProvider);
-    final indicators = calculator.calculateAll(state.klines, params: params);
-    state = state.copyWith(indicators: indicators);
+    final indicators = await compute(
+      calculateIndicatorsIsolate,
+      (klines: state.klines, params: params, requested: null),
+    );
+    _updateState(state.copyWith(indicators: indicators));
   }
 
-  /// 按需请求扩展指标（惰性计算）
-  void requestIndicators(Set<String> indicatorNames) {
+  /// 按需请求扩展指标（惰性计算，后台 isolate）
+  Future<void> requestIndicators(Set<String> indicatorNames) async {
     if (state.klines.isEmpty) return;
-    final calculator = _ref.read(indicatorCalculatorProvider);
-    final params = _ref.read(indicatorParamsProvider);
-    final indicators = calculator.calculateAll(
-      state.klines,
-      params: params,
-      requestedIndicators: indicatorNames,
-      existing: state.indicators,
+    final indicators = await compute(
+      calculateIndicatorsIsolate,
+      (klines: state.klines, params: _ref.read(indicatorParamsProvider), requested: indicatorNames),
     );
-    state = state.copyWith(indicators: indicators);
+    _updateState(state.copyWith(indicators: indicators));
   }
 }

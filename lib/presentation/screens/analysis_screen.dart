@@ -12,7 +12,6 @@ import '../widgets/markdown_card.dart';
 import '../../data/models/sentiment_data.dart';
 import '../../data/datasources/em_ai_api.dart';
 import '../../data/datasources/fund_flow_api.dart';
-import '../../domain/services/indicator_calculator.dart';
 import '../../domain/services/pattern_detector.dart';
 import '../../app/theme.dart';
 import '../providers/settings_provider.dart';
