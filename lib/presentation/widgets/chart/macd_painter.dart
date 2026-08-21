@@ -2,19 +2,18 @@ import 'package:flutter/material.dart';
 import '../../../data/models/indicator_data.dart';
 import '../../../core/constants/chart_config.dart';
 import '../../../app/theme.dart';
+import 'chart_viewport.dart';
 
 class MacdPainter extends CustomPainter {
   final IndicatorData indicators;
-  final int visibleStart;
-  final int visibleEnd;
-  final double candleWidth;
+  final ChartViewport viewport;
 
-  MacdPainter({
-    required this.indicators,
-    required this.visibleStart,
-    required this.visibleEnd,
-    required this.candleWidth,
-  });
+  MacdPainter({required this.indicators, required this.viewport})
+      : super(repaint: viewport);
+
+  int get visibleStart => viewport.visibleStart;
+  int get visibleEnd => viewport.visibleEnd;
+  double get candleWidth => viewport.candleWidth;
 
   @override
   void paint(Canvas canvas, Size size) {

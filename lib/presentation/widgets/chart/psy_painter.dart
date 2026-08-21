@@ -2,20 +2,19 @@ import 'package:flutter/material.dart';
 import '../../../data/models/indicator_data.dart';
 import '../../../app/theme.dart';
 import 'indicator_painter_helper.dart';
+import 'chart_viewport.dart';
 
 /// PSY 心理线 Painter — 范围 0~100，50 为中轴
 class PsyPainter extends CustomPainter {
   final IndicatorData indicators;
-  final int visibleStart;
-  final int visibleEnd;
-  final double candleWidth;
+  final ChartViewport viewport;
 
-  PsyPainter({
-    required this.indicators,
-    required this.visibleStart,
-    required this.visibleEnd,
-    required this.candleWidth,
-  });
+  PsyPainter({required this.indicators, required this.viewport})
+      : super(repaint: viewport);
+
+  int get visibleStart => viewport.visibleStart;
+  int get visibleEnd => viewport.visibleEnd;
+  double get candleWidth => viewport.candleWidth;
 
   @override
   void paint(Canvas canvas, Size size) {

@@ -3,13 +3,12 @@ import '../../../data/models/kline_data.dart';
 import '../../../data/models/indicator_data.dart';
 import '../../../core/constants/chart_config.dart';
 import '../../../app/theme.dart';
+import 'chart_viewport.dart';
 
 class CandlestickPainter extends CustomPainter {
   final List<KlineData> klines;
   final IndicatorData indicators;
-  final int visibleStart;
-  final int visibleEnd;
-  final double candleWidth;
+  final ChartViewport viewport;
   final bool showMA;
   final bool showBOLL;
   final bool showBBI;
@@ -20,16 +19,18 @@ class CandlestickPainter extends CustomPainter {
   CandlestickPainter({
     required this.klines,
     required this.indicators,
-    required this.visibleStart,
-    required this.visibleEnd,
-    required this.candleWidth,
+    required this.viewport,
     this.showMA = true,
     this.showBOLL = false,
     this.showBBI = false,
     this.showEXPMA = false,
     this.showKTN = false,
     this.period = 'day',
-  });
+  }) : super(repaint: viewport);
+
+  int get visibleStart => viewport.visibleStart;
+  int get visibleEnd => viewport.visibleEnd;
+  double get candleWidth => viewport.candleWidth;
 
   @override
   void paint(Canvas canvas, Size size) {

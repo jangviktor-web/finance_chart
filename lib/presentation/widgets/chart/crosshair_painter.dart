@@ -1,27 +1,26 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/kline_data.dart';
 import '../../../app/theme.dart';
+import 'chart_viewport.dart';
 
 class CrosshairPainter extends CustomPainter {
-  final Offset? position;
-  final KlineData? kline;
-  final double candleWidth;
-  final int visibleStart;
-  final int visibleEnd;
+  final ChartViewport viewport;
   final double Function(int)? indexToX;
   final double Function(double)? priceToY;
   final String period;
 
   CrosshairPainter({
-    this.position,
-    this.kline,
-    required this.candleWidth,
-    required this.visibleStart,
+    required this.viewport,
     this.indexToX,
     this.priceToY,
-    required this.visibleEnd,
     this.period = 'day',
-  });
+  }) : super(repaint: viewport);
+
+  Offset? get position => viewport.crosshairPosition;
+  KlineData? get kline => viewport.crosshairKline;
+  double get candleWidth => viewport.candleWidth;
+  int get visibleStart => viewport.visibleStart;
+  int get visibleEnd => viewport.visibleEnd;
 
   @override
   void paint(Canvas canvas, Size size) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/indicator_data.dart';
+import 'chart_viewport.dart';
 import 'asi_painter.dart';
 import 'atr_painter.dart';
 import 'bias_painter.dart';
@@ -22,36 +23,34 @@ import 'trix_painter.dart';
 import 'vr_painter.dart';
 import 'wr_painter.dart';
 
-/// 副图指标 Painter 工厂类型：统一构造签名
+/// 副图指标 Painter 工厂类型：统一构造签名（P1-6 + P1-5）
 typedef IndicatorPainterBuilder = CustomPainter Function(
   IndicatorData indicators,
-  int visibleStart,
-  int visibleEnd,
-  double candleWidth,
+  ChartViewport viewport,
 );
 
 /// 指标 Painter 注册表（P1-6）
 /// 新增指标时只需在此登记一项，无需再改动图表组件。
 final Map<String, IndicatorPainterBuilder> indicatorPainterRegistry = {
-  'MACD': (i, s, e, w) => MacdPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'KDJ': (i, s, e, w) => KdjPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'RSI': (i, s, e, w) => RsiPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'CCI': (i, s, e, w) => CciPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'WR': (i, s, e, w) => WrPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'DMI': (i, s, e, w) => DmiPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'BIAS': (i, s, e, w) => BiasPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'ATR': (i, s, e, w) => AtrPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'OBV': (i, s, e, w) => ObvPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'TRIX': (i, s, e, w) => TrixPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'EMV': (i, s, e, w) => EmvPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'MFI': (i, s, e, w) => MfiPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'VR': (i, s, e, w) => VrPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'ROC': (i, s, e, w) => RocPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'PSY': (i, s, e, w) => PsyPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'CR': (i, s, e, w) => CrPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'DPO': (i, s, e, w) => DpoPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'BRAR': (i, s, e, w) => BrarPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'MASS': (i, s, e, w) => MassPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'ASI': (i, s, e, w) => AsiPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
-  'DFMA': (i, s, e, w) => DfmaPainter(indicators: i, visibleStart: s, visibleEnd: e, candleWidth: w),
+  'MACD': (i, v) => MacdPainter(indicators: i, viewport: v),
+  'KDJ': (i, v) => KdjPainter(indicators: i, viewport: v),
+  'RSI': (i, v) => RsiPainter(indicators: i, viewport: v),
+  'CCI': (i, v) => CciPainter(indicators: i, viewport: v),
+  'WR': (i, v) => WrPainter(indicators: i, viewport: v),
+  'DMI': (i, v) => DmiPainter(indicators: i, viewport: v),
+  'BIAS': (i, v) => BiasPainter(indicators: i, viewport: v),
+  'ATR': (i, v) => AtrPainter(indicators: i, viewport: v),
+  'OBV': (i, v) => ObvPainter(indicators: i, viewport: v),
+  'TRIX': (i, v) => TrixPainter(indicators: i, viewport: v),
+  'EMV': (i, v) => EmvPainter(indicators: i, viewport: v),
+  'MFI': (i, v) => MfiPainter(indicators: i, viewport: v),
+  'VR': (i, v) => VrPainter(indicators: i, viewport: v),
+  'ROC': (i, v) => RocPainter(indicators: i, viewport: v),
+  'PSY': (i, v) => PsyPainter(indicators: i, viewport: v),
+  'CR': (i, v) => CrPainter(indicators: i, viewport: v),
+  'DPO': (i, v) => DpoPainter(indicators: i, viewport: v),
+  'BRAR': (i, v) => BrarPainter(indicators: i, viewport: v),
+  'MASS': (i, v) => MassPainter(indicators: i, viewport: v),
+  'ASI': (i, v) => AsiPainter(indicators: i, viewport: v),
+  'DFMA': (i, v) => DfmaPainter(indicators: i, viewport: v),
 };

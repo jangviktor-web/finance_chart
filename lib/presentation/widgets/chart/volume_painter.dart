@@ -2,19 +2,18 @@ import 'package:flutter/material.dart';
 import '../../../data/models/kline_data.dart';
 import '../../../core/constants/chart_config.dart';
 import '../../../app/theme.dart';
+import 'chart_viewport.dart';
 
 class VolumePainter extends CustomPainter {
   final List<KlineData> klines;
-  final int visibleStart;
-  final int visibleEnd;
-  final double candleWidth;
+  final ChartViewport viewport;
 
-  VolumePainter({
-    required this.klines,
-    required this.visibleStart,
-    required this.visibleEnd,
-    required this.candleWidth,
-  });
+  VolumePainter({required this.klines, required this.viewport})
+      : super(repaint: viewport);
+
+  int get visibleStart => viewport.visibleStart;
+  int get visibleEnd => viewport.visibleEnd;
+  double get candleWidth => viewport.candleWidth;
 
   @override
   void paint(Canvas canvas, Size size) {

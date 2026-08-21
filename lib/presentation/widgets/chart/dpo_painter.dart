@@ -2,20 +2,19 @@ import 'package:flutter/material.dart';
 import '../../../data/models/indicator_data.dart';
 import '../../../app/theme.dart';
 import 'indicator_painter_helper.dart';
+import 'chart_viewport.dart';
 
 /// DPO 去趋势价格震荡器 Painter — 以 0 为中轴
 class DpoPainter extends CustomPainter {
   final IndicatorData indicators;
-  final int visibleStart;
-  final int visibleEnd;
-  final double candleWidth;
+  final ChartViewport viewport;
 
-  DpoPainter({
-    required this.indicators,
-    required this.visibleStart,
-    required this.visibleEnd,
-    required this.candleWidth,
-  });
+  DpoPainter({required this.indicators, required this.viewport})
+      : super(repaint: viewport);
+
+  int get visibleStart => viewport.visibleStart;
+  int get visibleEnd => viewport.visibleEnd;
+  double get candleWidth => viewport.candleWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
