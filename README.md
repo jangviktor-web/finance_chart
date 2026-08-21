@@ -1,7 +1,6 @@
 <div align="center">
 
-<img src="https://github.com/user-attachments/assets/d4d103cd-270d-471a-8204-db92953ec87d" alt="策盈 QuantWin Logo" width="160">
-
+<img width="160" alt="logo" src="https://github.com/user-attachments/assets/ae9299db-770f-4e51-9d1d-31ae9b03b3f2" />
 
 
 
