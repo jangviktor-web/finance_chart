@@ -26,9 +26,10 @@
 ## 📸 应用截图
 
 <p align="center">
-<img width="4000" height="2160" alt="微信图片_20260525100307_31_134" src="https://github.com/user-attachments/assets/15cd2a67-d54d-4280-accf-25fcae67e8b5" />
+  
+<img width="4000" height="2160" alt="597392164-15cd2a67-d54d-4280-accf-25fcae67e8b5_compressed" src="https://github.com/user-attachments/assets/826e6464-7cfe-4c37-ba68-00a6098320cd" />
+<img width="4000" height="2160" alt="597392198-c8b65bb0-c019-487e-b15c-ffc9e022bfbc_compressed" src="https://github.com/user-attachments/assets/ce67f686-4f7e-42b2-a00c-d76c8734c216" />
 
-<img width="4000" height="2160" alt="微信图片_20260525100308_32_134" src="https://github.com/user-attachments/assets/c8b65bb0-c019-487e-b15c-ffc9e022bfbc" />
 
 ---
 
