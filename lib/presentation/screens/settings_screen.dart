@@ -262,6 +262,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // ── 测试连接（多端点探测）──
 
+  /// 是否为本机/模拟器回环地址（这些地址允许 http 明文调试）
+  bool _isLocalHost(String host) {
+    return host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '10.0.2.2' ||
+        host.startsWith('192.168.') ||
+        host.startsWith('10.0.');
+  }
+
   Future<void> _testConnection() async {
     setState(() {
       _isTestingConnection = true;
@@ -276,6 +285,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() {
           _isTestingConnection = false;
           _connectionStatus = '地址格式错误（需要 http:// 或 https://）';
+          _connectionColor = AppColors.down;
+        });
+        return;
+      }
+      // 安全校验：非本机/内网地址必须使用 https，避免明文传输被中间人窃取
+      if (url.startsWith('http://') && !_isLocalHost(uri.host)) {
+        setState(() {
+          _isTestingConnection = false;
+          _connectionStatus = '非本机地址必须使用 https（当前为 http，有被窃听风险）';
           _connectionColor = AppColors.down;
         });
         return;
