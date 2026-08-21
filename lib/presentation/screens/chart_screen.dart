@@ -11,7 +11,6 @@ import '../widgets/chart/kline_chart_widget.dart';
 import '../widgets/common/error_widget.dart';
 import 'analysis_screen.dart';
 import '../../app/theme.dart';
-import '../../data/models/watchlist_group.dart';
 
 class ChartScreen extends ConsumerStatefulWidget {
   final String stockCode;

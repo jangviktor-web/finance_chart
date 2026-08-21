@@ -5,27 +5,7 @@ import '../../../core/constants/chart_config.dart';
 import '../../../app/theme.dart';
 import 'candlestick_painter.dart';
 import 'volume_painter.dart';
-import 'macd_painter.dart';
-import 'kdj_painter.dart';
-import 'rsi_painter.dart';
-import 'cci_painter.dart';
-import 'wr_painter.dart';
-import 'dmi_painter.dart';
-import 'bias_painter.dart';
-import 'atr_painter.dart';
-import 'obv_painter.dart';
-import 'trix_painter.dart';
-import 'emv_painter.dart';
-import 'mfi_painter.dart';
-import 'vr_painter.dart';
-import 'roc_painter.dart';
-import 'psy_painter.dart';
-import 'cr_painter.dart';
-import 'dpo_painter.dart';
-import 'brar_painter.dart';
-import 'mass_painter.dart';
-import 'asi_painter.dart';
-import 'dfma_painter.dart';
+import 'indicator_painter_registry.dart';
 import 'crosshair_painter.dart';
 
 class KlineChartWidget extends StatefulWidget {
@@ -179,58 +159,10 @@ class _KlineChartWidgetState extends State<KlineChartWidget> with TickerProvider
   }
 
   CustomPainter _createIndicatorPainter() {
-    final args = (
-      indicators: widget.indicators,
-      visibleStart: _visibleStart,
-      visibleEnd: _visibleEnd,
-      candleWidth: _candleWidth,
-    );
-
-    switch (widget.selectedIndicator) {
-      case 'KDJ':
-        return KdjPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'RSI':
-        return RsiPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'CCI':
-        return CciPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'WR':
-        return WrPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'DMI':
-        return DmiPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'BIAS':
-        return BiasPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'ATR':
-        return AtrPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'OBV':
-        return ObvPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'TRIX':
-        return TrixPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'EMV':
-        return EmvPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'MFI':
-        return MfiPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'VR':
-        return VrPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'ROC':
-        return RocPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'PSY':
-        return PsyPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'CR':
-        return CrPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'DPO':
-        return DpoPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'BRAR':
-        return BrarPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'MASS':
-        return MassPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'ASI':
-        return AsiPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'DFMA':
-        return DfmaPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-      case 'MACD':
-      default:
-        return MacdPainter(indicators: args.indicators, visibleStart: args.visibleStart, visibleEnd: args.visibleEnd, candleWidth: args.candleWidth);
-    }
+    // P1-6: 通过注册表创建，新增指标无需改动本组件
+    final builder = indicatorPainterRegistry[widget.selectedIndicator] ??
+        indicatorPainterRegistry['MACD']!;
+    return builder(widget.indicators, _visibleStart, _visibleEnd, _candleWidth);
   }
 
   // 手势处理 — 统一由 onScale* 处理滑动和缩放

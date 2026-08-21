@@ -27,9 +27,19 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // TODO: 上架前必须替换为正式 release keystore（当前用 debug 签名仅便于本地调试）。
+            // 配置方式：
+            //   1. 生成 keystore：keytool -genkey -v -keystore release.jks -alias release -keyalg RSA -keysize 2048 -validity 10000
+            //   2. 在 android/key.properties 填入 storeFile/storePassword/keyAlias/keyPassword
+            //   3. 启用下方 signingConfigs.release 块并改为 signingConfig = signingConfigs.getByName("release")
             signingConfig = signingConfigs.getByName("debug")
+            // P0-1: 开启 R8 压缩/混淆（显著减小包体并防止简单反编译）
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
