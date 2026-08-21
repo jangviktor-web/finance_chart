@@ -16,6 +16,8 @@ import '../../domain/services/pattern_detector.dart';
 import '../../app/theme.dart';
 import '../providers/settings_provider.dart';
 import 'ai_chat_screen.dart';
+import 'research_screen.dart';
+import 'interactive_qa_screen.dart';
 
 class AnalysisScreen extends ConsumerStatefulWidget {
   final String stockCode;
@@ -160,6 +162,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
           _buildVolumeAnalysis(klines, lastIndex),
           _buildOverallSummary(indicators, klines, lastIndex),
           _buildFundFlowCard(),
+          _buildInfoEntries(),
           _buildAiDiagnosis(),
         ],
       ),
@@ -634,6 +637,66 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   }
 
   // AI 诊断
+  /// 公司信息入口卡片（A2 研报 / A3 互动问答）
+  Widget _buildInfoEntries() {
+    return _buildAnalysisCard(
+      title: '公司信息',
+      icon: Icons.folder_shared_outlined,
+      children: [
+        _buildEntryRow(
+          Icons.description_outlined,
+          '研究报告',
+          '东财研报（近90天）',
+          () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => ResearchScreen(
+              stockCode: widget.stockCode,
+              stockName: widget.stockName,
+            ),
+          )),
+        ),
+        const SizedBox(height: 4),
+        _buildEntryRow(
+          Icons.question_answer_outlined,
+          '互动问答',
+          '巨潮互动易投资者问答',
+          () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => InteractiveQaScreen(
+              stockCode: widget.stockCode,
+              stockName: widget.stockName,
+            ),
+          )),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEntryRow(IconData icon, String title, String subtitle, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAiDiagnosis() {
     return _buildAnalysisCard(
       title: 'AI 诊断',

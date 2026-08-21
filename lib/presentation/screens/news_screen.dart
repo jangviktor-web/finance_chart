@@ -2,11 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../data/datasources/news_api.dart';
+import '../../data/datasources/wscn_api.dart';
 import '../../data/models/news_data.dart';
+import '../../data/models/calendar_data.dart';
 import 'chart_screen.dart';
 import 'webview_screen.dart';
 
-/// 新闻资讯页面 — 3 Tab
+/// 新闻资讯页面 — 5 Tab（7x24 / 财联社 / 华尔街 / 财经日历 / 搜索）
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
 
@@ -21,7 +23,7 @@ class _NewsScreenState extends State<NewsScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -39,12 +41,15 @@ class _NewsScreenState extends State<NewsScreen> with SingleTickerProviderStateM
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true, // 5 个 tab 可横向滚动
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primary,
           tabs: const [
             Tab(text: '7x24快讯'),
             Tab(text: '财联社'),
+            Tab(text: '华尔街'),
+            Tab(text: '财经日历'),
             Tab(text: '新闻搜索'),
           ],
         ),
@@ -54,6 +59,8 @@ class _NewsScreenState extends State<NewsScreen> with SingleTickerProviderStateM
         children: [
           _LiveNewsTab(api: _api, source: '7x24'),
           _LiveNewsTab(api: _api, source: 'cls'),
+          const _WscnTab(),
+          const _CalendarTab(),
           _NewsSearchTab(api: _api),
         ],
       ),
@@ -417,5 +424,179 @@ class _NewsSearchTabState extends State<_NewsSearchTab> {
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => WebViewScreen(url: url),
     ));
+  }
+}
+
+/// 华尔街见闻快讯 Tab（B1）
+class _WscnTab extends StatefulWidget {
+  const _WscnTab();
+
+  @override
+  State<_WscnTab> createState() => _WscnTabState();
+}
+
+class _WscnTabState extends State<_WscnTab> {
+  final _api = WscnApi();
+  List<LiveNewsItem> _data = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await _api.getLives(channel: 'a-stock-channel');
+      if (mounted) setState(() { _data = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('加载失败: $_error', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _load, child: const Text('重试')),
+          ],
+        ),
+      );
+    }
+    if (_data.isEmpty) return Center(child: Text('暂无快讯', style: TextStyle(color: AppColors.textSecondary)));
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppColors.primary,
+      child: ListView.builder(
+        itemCount: _data.length,
+        itemBuilder: (ctx, i) {
+          final item = _data[i];
+          final isToday = item.time.year == DateTime.now().year &&
+              item.time.month == DateTime.now().month &&
+              item.time.day == DateTime.now().day;
+          final timeStr = isToday
+              ? '${item.time.hour.toString().padLeft(2, '0')}:${item.time.minute.toString().padLeft(2, '0')}'
+              : '${item.time.month.toString().padLeft(2, '0')}/${item.time.day.toString().padLeft(2, '0')} ${item.time.hour.toString().padLeft(2, '0')}:${item.time.minute.toString().padLeft(2, '0')}';
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.divider, width: 0.5)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 50, child: Text(timeStr, style: TextStyle(color: AppColors.textSecondary, fontSize: 11))),
+                Expanded(
+                  child: Text(item.content,
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 13, height: 1.4)),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 财经日历 Tab（A4）
+class _CalendarTab extends StatefulWidget {
+  const _CalendarTab();
+
+  @override
+  State<_CalendarTab> createState() => _CalendarTabState();
+}
+
+class _CalendarTabState extends State<_CalendarTab> {
+  final _api = WscnApi();
+  List<CalendarEvent> _data = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await _api.getCalendar(channel: 'global-channel');
+      if (mounted) setState(() { _data = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('加载失败: $_error', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _load, child: const Text('重试')),
+          ],
+        ),
+      );
+    }
+    if (_data.isEmpty) return Center(child: Text('暂无日历数据', style: TextStyle(color: AppColors.textSecondary)));
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppColors.primary,
+      child: ListView.builder(
+        itemCount: _data.length,
+        itemBuilder: (ctx, i) {
+          final item = _data[i];
+          final timeStr = '${item.time.month.toString().padLeft(2, '0')}/${item.time.day.toString().padLeft(2, '0')} '
+              '${item.time.hour.toString().padLeft(2, '0')}:${item.time.minute.toString().padLeft(2, '0')}';
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.divider, width: 0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(timeStr, style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                    const SizedBox(width: 8),
+                    if (item.country.isNotEmpty)
+                      Text('[${item.country}]', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                    const Spacer(),
+                    Text(item.importanceLabel, style: TextStyle(color: AppColors.warning, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(item.title, style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+                if (item.period.isNotEmpty)
+                  Text('周期: ${item.period}', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                const SizedBox(height: 4),
+                Text(
+                  '实际: ${item.actual.isEmpty ? '-' : item.actual}   预测: ${item.forecast.isEmpty ? '-' : item.forecast}   前值: ${item.previous.isEmpty ? '-' : item.previous}',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 }
