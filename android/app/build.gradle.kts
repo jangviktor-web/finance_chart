@@ -23,6 +23,22 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // splits.abi 接管 abi 控制时，必须清空 ndk.abiFilters，否则 AGP 报
+        // "ndk abiFilters cannot be present when splits abi filters are set" 冲突。
+        ndk {
+            abiFilters.clear()
+        }
+    }
+
+    // 分架构打包：flutter build apk 默认产出 arm64-v8a / armeabi-v7a / x86_64 三个独立 APK，
+    // universalApk=false 表示不再额外打全架构通用包（上架/分发只需发 arm64-v8a 包覆盖 99%+ 新机）。
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
+        }
     }
 
     buildTypes {

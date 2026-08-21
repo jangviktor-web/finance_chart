@@ -4,6 +4,58 @@
 
 ---
 
+## v1.9.0 (2026-08-21)
+
+**分架构 APK 打包 · 多源自动降级备用链路 · 资讯扩充（华尔街见闻/财经日历/研报/互动易）· R8 压缩 · 指标计算 isolate · 系统级 API Key 安全存储**
+
+### 新增功能（S/A/B 级备用信息源）
+
+**多源自动降级**
+- 实时行情：腾讯 → 百度 → 东方财富 三级自动降级，任一源故障自动切换
+- K 线竞速池：腾讯 + 新浪并行取最优，东方财富兜底（百度 K 线接口已确认失效，不再使用）
+
+**资讯与研报扩充**
+- 华尔街见闻快讯 tab + 财经日历 tab（新闻页 3 → 5 个 tab，可滚动）
+- 东方财富个股研报页（研究页）
+- 巨潮互动易问答页（分析页"公司信息"入口进入）
+- 通达信 mootdx 后端 fallback 预留接口（S1，待 Python 后端部署）
+
+### 性能与体验优化（P0 / P1 / P2 共 12 项）
+
+- **P0-1** R8 代码混淆 + 资源压缩（包体更小、启动更快、反编译更难）
+- **P0-2** API Key 迁移至系统安全存储 `flutter_secure_storage`（Android Keystore / iOS Keychain），旧 XOR 数据首次启动自动迁移
+- **P0-3** 指标计算移入独立 isolate，不再阻塞 UI 主线程
+- **P0-4** 版本号单一来源对齐（PubSpec）
+- **P1-5** 图表手势状态下沉 `ChartViewport`（只重绘不重建，消除每帧 setState）
+- **P1-6** 指标 painter 注册表化（替代 24 分支 switch）
+- **P1-7** 网络异常保留原始错误信息
+- **P1-8** 单元测试补齐（基线 1 个失败 → 18 个全绿）
+- **P2-9** 缓存 LRU 上限
+- **P2-10** provider autoDispose，避免泄漏
+- **P2-11** 严格 lint 规则
+- **P2-12** 后端地址 https 校验
+
+### 构建与打包
+
+- `android/app/build.gradle.kts`：新增 `splits { abi { ... } }` 分架构打包（arm64-v8a / armeabi-v7a / x86_64 三包，`universalApk=false`），并 `ndk { abiFilters.clear() }` 解除与 Flutter 注入 abiFilters 的冲突
+- `android/settings.gradle.kts`：新增 Flutter 引擎专用仓库 `storage.flutter-io.cn`（国内镜像），解决 `io.flutter:*` 依赖在国内解析失败
+- `android/gradle.properties`：内存参数收敛（ParallelGC + 1G 堆 + 单 worker），适配内存紧张环境
+- `pubspec.yaml`：`flutter_secure_storage` 由 ^11 降至 ^10（避开 Android SDK 37 依赖）
+
+### 修改 / 新增文件
+
+- `lib/data/datasources/market_api.dart` — 行情自动降级 + K 线竞速池
+- `lib/data/datasources/backend_api.dart` — mootdx 后端 fallback 预留
+- `lib/data/datasources/wscn_api.dart` — 华尔街见闻快讯 + 财经日历
+- `lib/data/datasources/research_api.dart` — 东财研报
+- `lib/data/datasources/hudong_api.dart` — 互动易
+- `lib/presentation/screens/news_screen.dart` — 3 → 5 tab
+- `lib/presentation/screens/research_screen.dart` / `interactive_qa_screen.dart` — 新增页面
+- `lib/presentation/screens/analysis_screen.dart` — 公司信息入口
+- `android/app/build.gradle.kts` / `settings.gradle.kts` / `gradle.properties` — 打包与构建配置
+
+---
+
 ## v1.7.0 (2026-05-21)
 
 **搜索联想 + 回测时间选择 + 内嵌浏览器 + 宏观数据扩展 + API Key 脱敏**

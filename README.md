@@ -37,12 +37,13 @@
 
 <div align="center">
 
-[![Latest APK](https://img.shields.io/badge/下载_v1.8.2-APK-E53935?style=for-the-badge&logo=android)](https://github.com/jangviktor-web/finance_chart/releases/download/v1.8.2/app-release.apk)
+[![Latest APK](https://img.shields.io/badge/下载_v1.9.0-APK-E53935?style=for-the-badge&logo=android)](https://github.com/jangviktor-web/finance_chart/releases/download/v1.9.0/app-arm64-v8a-release.apk)
 
 </div>
 
 | 版本 | 日期 | 更新内容 |
 |:---:|:---:|---|
+| **v1.9.0** | 2026-08-21 | 分架构 APK（3 包·体积减半）· 多源自动降级 · 华尔街见闻/财经日历 · 研报页 · 互动易 · R8 压缩 · 指标 isolate · 系统级 Key 存储 |
 | **v1.8.2** | 2026-06-22 | K 线缓存优化 · 强制刷新 · 实时重绘 · 公告 · 板块成分股 · 按名称搜索 |
 | **v1.7.3** | 2026-05-22 | 发现页内嵌热点列表 · API Key XOR 加密存储 · 脱敏显示 |
 | **v1.7.1** | 2026-05-22 | 全 API 频率限制 · 每日调用上限 · 宏观数据缓存 |
@@ -50,7 +51,51 @@
 | **v1.6.0** | 2026-05-21 | AI 热点 · AI 同业对比 · AI 深度分析 · 全局限流 |
 | **v1.4.0** | 2026-05-20 | 资金流向 · 北向深度 · 龙虎榜扩展 |
 
+> 📦 **v1.9.0 起改为分架构打包**：每个 Release 含 3 个 APK —— `app-arm64-v8a-release.apk`（**现代手机选这个**）、`app-armeabi-v7a-release.apk`（老旧 32 位机）、`app-x86_64-release.apk`（模拟器/ChromeOS）。功能完全一致，只是安装包更小。**详见下方「v1.9.0 重要变更」**。
+>
 > 完整版本列表见 [Releases](https://github.com/jangviktor-web/finance_chart/releases) · 变更详情见 [CHANGELOG](CHANGELOG.md)
+
+---
+
+## 📦 v1.9.0 重要变更（相比 v1.8.2 有什么区别？）
+
+这次大版本主要做了**打包方式、数据源稳定性、性能、安全**四方面的升级。下面用大白话解释每项和你的关系。
+
+### 1️⃣ APK 分包：一个 64MB 大包 → 三个小包（最关键的变化）
+
+| | v1.8.2（旧） | v1.9.0（新） |
+|---|---|---|
+| 安装包 | 单个 `app-release.apk`（约 **64MB**） | 3 个架构包，每个约 **22–25MB** |
+| 内含 | 同时塞了 arm64 + armeabi + x86 三套运行库 | 每个包只含对应一套运行库 |
+| 选哪个 | 不用选，一个包通吃 | **99% 的现代手机下 `app-arm64-v8a-release.apk` 即可** |
+
+- `app-arm64-v8a-release.apk`（约 24MB）—— **绝大多数手机（2019 年后的 64 位机）装这个**
+- `app-armeabi-v7a-release.apk`（约 22MB）—— 老旧 32 位机（2018 年前）
+- `app-x86_64-release.apk`（约 25MB）—— 安卓模拟器 / ChromeOS
+
+**对你的影响**：下载体积直接减半、装得更快；功能、界面、数据完全一样，只是把"用不到的架构运行库"剔除了。装错架构会提示"解析失败"，换对应包即可。
+
+### 2️⃣ 数据源更稳：新增 S/A/B 级备用信息源
+
+旧版主要靠腾讯 / 东方财富 / 百度，某个源临时抽风时对应功能会转圈。新版补齐了多级备用链路：
+
+- **行情自动降级**：腾讯 → 百度 → 东方财富（东财兜底），任一源挂了自动切下一个
+- **K 线竞速**：腾讯 + 新浪并行取最快结果，东方财富兜底
+- **资讯扩充**：新增「华尔街见闻快讯」「财经日历」两个 tab（新闻页从 3 个 tab 变 5 个）
+- **新页面**：东方财富个股研报页、巨潮互动易问答页（从分析页入口进入）
+
+**对你的影响**：网络抖动时 App 更不容易"卡死白屏"，单个数据源故障基本无感。
+
+### 3️⃣ 性能与流畅度
+
+- **指标计算移入独立线程（isolate）**：以前算 MACD/KDJ 等会卡主线程，现在滑动图表更跟手
+- **图表手势优化**：拖动 K 线只重绘不重建组件，帧率更稳
+- **R8 代码混淆压缩**：包体更小、启动更快、也更难被反编译
+
+### 4️⃣ 安全升级
+
+- API Key 从「SharedPreferences + XOR 加密」升级为**系统级安全存储**（Android Keystore / iOS Keychain），更难被提取
+- 旧版 XOR 数据自动迁移，升级后**不用重新填 Key**
 
 ---
 
@@ -119,7 +164,7 @@
 
 ### 🛡️ 安全与体验
 
-- **API Key 加密存储** — XOR + Base64 加密，SharedPreferences 不存明文
+- **API Key 系统级安全存储** — 迁移至系统安全存储（Android Keystore / iOS Keychain），旧 XOR 数据自动迁移，比 SharedPreferences + XOR 更难被提取
 - **界面脱敏** — 始终显示首2+****+末2格式，无明文切换
 - **全局限流** — 16 个域名独立限流 + 每日调用上限 + 指数退避
 - **功能开关** — 每个功能独立启用 / 禁用
@@ -174,7 +219,7 @@ lib/
 **核心设计模式：**
 - **多源降级** — 每个 API 有主备数据源，故障自动切换
 - **全局频率限制** — 按域名限流 + 每日上限 + 指数退避
-- **加密存储** — API Key XOR 加密后持久化
+- **加密存储** — API Key 存于系统安全存储（Keystore / Keychain），旧 XOR 数据自动迁移
 
 ---
 
@@ -195,7 +240,13 @@ flutter pub get
 flutter build apk --release
 ```
 
-输出：`build/app/outputs/flutter-apk/app-release.apk`
+输出（分架构打包，默认产出 3 个独立 APK）：
+```
+build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   # 现代手机（推荐）
+build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk # 老旧 32 位机
+build/app/outputs/flutter-apk/app-x86_64-release.apk      # 模拟器 / ChromeOS
+```
+> 若想一次打全架构通用包，用 `flutter build apk --release --split-per-abi` 的互补方式（去掉 `android/app/build.gradle.kts` 里的 `splits` 配置即可）。
 
 ---
 
@@ -223,6 +274,7 @@ flutter build apk --release
 
 | 版本 | 日期 | 更新 |
 |---|---|---|
+| v1.9.0 | 2026-08-21 | 分架构 APK · 多源自动降级 · 华尔街见闻/财经日历 · 研报页 · 互动易 · R8 压缩 · 指标 isolate · 系统级 Key 存储 |
 | v1.8.1 | 2026-06-22 | K 线缓存优化 · 强制刷新 · 实时重绘 |
 | v1.8.0 | 2026-06-22 | 东财公告 · 板块成分股 · 按名称搜索新闻 · RateLimiter 容错增强 |
 | v1.7.3 | 2026-05-22 | 发现页内嵌热点 · API Key 加密 · 脱敏显示 |
