@@ -1,3 +1,4 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/utils/key_cipher.dart';
 
@@ -25,6 +26,9 @@ class SettingsStorage {
   static const _keyFundFlowSource = 'setting_fund_flow_source';
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
+
+  /// P0-2: API Key 使用系统安全存储（Android Keystore / iOS Keychain）
+  static const _secureStorage = FlutterSecureStorage();
 
   // ── 读取 ──
 
@@ -74,10 +78,21 @@ class SettingsStorage {
       (await _prefs).getBool(_keyEnableDeepAnalysis) ?? true;
 
   Future<String> loadEmApiKey() async {
-    final stored = (await _prefs).getString(_keyEmApiKey);
-    if (stored == null) return 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH';
-    // 兼容旧版明文：未加密的原样返回，已加密的解密后返回
-    return KeyCipher.decrypt(stored);
+    // P0-2: 优先读安全存储；不存在则从旧 SharedPreferences(XOR) 迁移后清除旧值
+    final secureValue = await _secureStorage.read(key: _keyEmApiKey);
+    if (secureValue != null && secureValue.isNotEmpty) return secureValue;
+
+    final prefs = await _prefs;
+    final legacy = prefs.getString(_keyEmApiKey);
+    if (legacy != null && legacy.isNotEmpty) {
+      final plain = KeyCipher.decrypt(legacy);
+      if (plain.isNotEmpty) {
+        await _secureStorage.write(key: _keyEmApiKey, value: plain);
+        await prefs.remove(_keyEmApiKey); // 迁移完成后清除旧明文来源
+        return plain;
+      }
+    }
+    return 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH';
   }
 
   Future<String> loadRealtimeSource() async =>
@@ -139,8 +154,10 @@ class SettingsStorage {
   Future<void> saveEnableDeepAnalysis(bool value) async =>
       (await _prefs).setBool(_keyEnableDeepAnalysis, value);
 
-  Future<void> saveEmApiKey(String value) async =>
-      (await _prefs).setString(_keyEmApiKey, KeyCipher.encrypt(value));
+  Future<void> saveEmApiKey(String value) async {
+    // P0-2: 写入系统安全存储，不再使用可逆 XOR 存 SharedPreferences
+    await _secureStorage.write(key: _keyEmApiKey, value: value);
+  }
 
   Future<void> saveRealtimeSource(String value) async =>
       (await _prefs).setString(_keyRealtimeSource, value);

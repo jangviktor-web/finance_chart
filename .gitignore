@@ -49,3 +49,6 @@ app.*.map.json
 build/
 .dart_tool/
 pubspec.lock
+
+# 本地临时目录（pub get 暂存）
+.tmp/
