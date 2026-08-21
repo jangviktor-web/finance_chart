@@ -58,14 +58,14 @@ class MarketApi {
       } else if (realtimeSource == DataSourceType.baidu) {
         return await _baiduApi.getRealtime(code);
       } else {
-        // auto 模式：腾讯 → 东方财富 → 百度
+        // auto 模式：腾讯 → 百度 → 东财（S2：东财风控最高，仅作最后兜底）
         try {
           return await _getRealtimeFromTencentRaw(code);
         } catch (e) {
           try {
-            return await _getRealtimeFromEastmoney(code);
-          } catch (e2) {
             return await _baiduApi.getRealtime(code);
+          } catch (e2) {
+            return await _getRealtimeFromEastmoney(code);
           }
         }
       }
@@ -199,10 +199,10 @@ class MarketApi {
       } else if (klineSource == DataSourceType.tencent) {
         return await _getKlineFromTencent(code, period, count);
       } else {
-        // auto 模式：腾讯优先（频率限制最宽松），并行竞速
+        // auto 模式（S2）：腾讯+新浪 竞速（低风控源优先），全部失败再兜底东财
+        // 注：百度 K 线接口当前不可用（返回空），故不加入竞速池
         final sources = <_Source<List<KlineData>>>[
           _Source('tencent', _getKlineFromTencent(code, period, count)),
-          _Source('eastmoney', _getKlineFromEastMoney(code, period, count)),
         ];
 
         // 新浪只支持日/周/月线
@@ -210,7 +210,12 @@ class MarketApi {
           sources.add(_Source('sina', _getKlineFromSina(code, period, count)));
         }
 
-        return _race(sources);
+        try {
+          return await _race(sources);
+        } catch (_) {
+          // 东财风控最高，仅在低风控源全部失败时兜底
+          return await _getKlineFromEastMoney(code, period, count);
+        }
       }
     }
 

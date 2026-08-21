@@ -162,6 +162,23 @@ class BackendApi {
     });
   }
 
+  // ──────────── 通达信 mootdx 兜底（S1，需后端部署）────────────
+
+  /// 兜底实时行情 — 后端通过 mootdx(TCP 7709) 获取，不封 IP。
+  /// 待后端暴露 /api/v1/fallback/quote 后，可在 market_api 降级链尾部接入。
+  Future<Map<String, dynamic>> getFallbackQuote(String code) async {
+    return _get('/api/v1/fallback/quote?code=$code');
+  }
+
+  /// 兜底 K 线 — 后端通过 mootdx(TCP 7709) 获取。
+  /// 待后端暴露 /api/v1/fallback/kline 后，可在 market_api 降级链尾部接入。
+  Future<Map<String, dynamic>> getFallbackKline(String code, {
+    String period = 'day',
+    int count = 200,
+  }) async {
+    return _get('/api/v1/fallback/kline?code=$code&period=$period&count=$count');
+  }
+
   // ──────────── 底层请求 ────────────
 
   Future<Map<String, dynamic>> _get(String path) {
