@@ -57,6 +57,8 @@
 > 📦 **v1.11.2 起改为单个通用 APK**：每个 Release 只含 1 个 `finance_chart_vX.Y.Z.apk`（fat APK，同时内置 arm64 / armeabi-v7a / x86_64 运行库，一个文件通吃所有设备），安装包约 30–40MB。**分架构瘦身背景见下方「v1.9.0 重要变更」**。
 >
 > 完整版本列表见 [Releases](https://github.com/jangviktor-web/finance_chart/releases) · 变更详情见 [CHANGELOG](CHANGELOG.md)
+>
+> ⚠️ **升级必读（v1.11.2 起）**：本版本起改为 **GitHub Actions 云端自动构建并签名**，与此前你本机手动构建的版本（v1.11.1 及更早）使用**不同的签名证书**。Android 不允许不同签名的安装包覆盖升级，所以从旧版本升级时请**先卸载旧版、再安装新版**，否则会提示「应用未安装 / 签名冲突」而安装失败。卸载仅清除 App 本机数据（含已填写的同花顺 Key 等本地配置），重装后到「设置」重新填写即可。
 
 ---
 
