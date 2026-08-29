@@ -15,6 +15,8 @@ import 'ai_chat_screen.dart';
 import 'compare_screen.dart';
 import 'fund_flow_screen.dart';
 import 'comparable_company_screen.dart';
+import 'smart_screener_screen.dart';
+import 'fund_module_screen.dart';
 import '../../data/datasources/search_api.dart';
 import '../../data/datasources/sentiment_api.dart';
 import '../../data/datasources/em_ai_api.dart';
@@ -188,12 +190,16 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     setState(() => _hotspotLoading = true);
     try {
       final result = await _getHotspotApi().getHotspot(question: query);
+      // 切主题会整树重建（MaterialApp 换 Key），本 State 可能在 await 期间
+      // 已被销毁；此时再 setState 会抛 "setState() called after dispose()"。
+      if (!mounted) return;
       setState(() {
         _hotspotMarkdown = result;
         _hotspotItems = _parseHotspotItems(result);
         _hotspotLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _hotspotLoading = false);
     }
   }
@@ -593,6 +599,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       ('资金流向', Icons.account_balance, AppColors.ma60, () => const FundFlowScreen()),
       if (settings.enableAi)
         ('AI 助手', Icons.smart_toy, AppColors.primary, () => const AiChatScreen()),
+      if (settings.enableAi)
+        ('智能选股', Icons.auto_awesome, AppColors.ma20, () => const SmartScreenerScreen()),
+      ('公募基金', Icons.account_balance_wallet, AppColors.ma60, () => const FundModuleScreen()),
       if (settings.enablePeerCompare)
         ('同业对比', Icons.bar_chart, AppColors.ma20, () => const ComparableCompanyScreen()),
     ];

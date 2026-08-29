@@ -20,6 +20,7 @@ class SettingsStorage {
   static const _keyEnablePeerCompare = 'setting_enable_peer_compare';
   static const _keyEnableDeepAnalysis = 'setting_enable_deep_analysis';
   static const _keyEmApiKey = 'setting_em_api_key';
+  static const _keyThinksApiKey = 'setting_thinks_api_key';
   static const _keyRealtimeSource = 'setting_realtime_source';
   static const _keyKlineSource = 'setting_kline_source';
   static const _keyNewsSource = 'setting_news_source';
@@ -95,6 +96,16 @@ class SettingsStorage {
     return 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH';
   }
 
+  /// 同花顺金融数据服务统一 API Key（纯 BYOK，存于系统安全存储）
+  ///
+  /// 未配置时返回空串，由 UI 引导用户到设置页填入自己的 Key。
+  /// 曾在此内置过测试用 Key（供本地联调），发布前已移除 —— 切勿再硬编码
+  /// 任何凭据进源码：随包分发的 Key 可被反编译提取，且无法吊销。
+  Future<String> loadThinksApiKey() async {
+    final secureValue = await _secureStorage.read(key: _keyThinksApiKey);
+    return secureValue ?? '';
+  }
+
   Future<String> loadRealtimeSource() async =>
       (await _prefs).getString(_keyRealtimeSource) ?? 'auto';
 
@@ -157,6 +168,11 @@ class SettingsStorage {
   Future<void> saveEmApiKey(String value) async {
     // P0-2: 写入系统安全存储，不再使用可逆 XOR 存 SharedPreferences
     await _secureStorage.write(key: _keyEmApiKey, value: value);
+  }
+
+  /// 同花顺 API Key（仅存用户自备 Key 于系统安全存储，绝不写日志/代码/Git）
+  Future<void> saveThinksApiKey(String value) async {
+    await _secureStorage.write(key: _keyThinksApiKey, value: value);
   }
 
   Future<void> saveRealtimeSource(String value) async =>

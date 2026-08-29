@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -48,9 +51,9 @@ android {
     // 读取 android/key.properties（已被 .gitignore 忽略，不会进仓库）。
     // 本地无 key.properties 时回退 debug 签名，保证本地 `flutter build apk --release` 不受影响。
     val keystorePropsFile = rootProject.file("key.properties")
-    val keystoreProps = java.util.Properties()
+    val keystoreProps = Properties()
     if (keystorePropsFile.exists()) {
-        keystoreProps.load(java.io.FileInputStream(keystorePropsFile))
+        keystoreProps.load(FileInputStream(keystorePropsFile))
     }
     val hasReleaseKey = keystorePropsFile.exists() &&
             keystoreProps["storeFile"] != null &&

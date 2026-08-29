@@ -18,10 +18,6 @@ class _MacroScreenState extends State<MacroScreen> {
   bool _loading = true;
   String? _error;
 
-  // 新增指标 key
-  static const _newKeys = ['高炉开工率', '30城商品房成交', '动力电池装机', '机器人产量增速',
-      '社融规模', 'MLF利率', '美元/人民币', '10Y国债收益率'];
-
   @override
   void initState() {
     super.initState();
@@ -38,15 +34,6 @@ class _MacroScreenState extends State<MacroScreen> {
         _api.getPmi(limit: 12),
         _api.getM2(limit: 12),
         _api.getLpr(limit: 10),
-        // 新增指标（容错：失败返回空数据）
-        _api.getBlastFurnace(limit: 24),
-        _api.getHousing(limit: 24),
-        _api.getBattery(limit: 24),
-        _api.getRobot(limit: 24),
-        _api.getSocialFinance(limit: 12),
-        _api.getMlf(limit: 12),
-        _api.getUsdCny(limit: 30),
-        _api.getBond10y(limit: 30),
       ]);
 
       if (mounted) {
@@ -57,14 +44,6 @@ class _MacroScreenState extends State<MacroScreen> {
           _indicators['PMI'] = results[3] as MacroIndicator;
           _indicators['M2'] = results[4] as MacroIndicator;
           _lprData = results[5] as List<LprData>;
-          _indicators['高炉开工率'] = results[6] as MacroIndicator;
-          _indicators['30城商品房成交'] = results[7] as MacroIndicator;
-          _indicators['动力电池装机'] = results[8] as MacroIndicator;
-          _indicators['机器人产量增速'] = results[9] as MacroIndicator;
-          _indicators['社融规模'] = results[10] as MacroIndicator;
-          _indicators['MLF利率'] = results[11] as MacroIndicator;
-          _indicators['美元/人民币'] = results[12] as MacroIndicator;
-          _indicators['10Y国债收益率'] = results[13] as MacroIndicator;
           _loading = false;
         });
       }
@@ -95,20 +74,6 @@ class _MacroScreenState extends State<MacroScreen> {
                       _buildMacroCard('PMI（制造业采购经理指数）', _indicators['PMI']),
                       _buildMacroCard('M2（广义货币供应量增速）', _indicators['M2']),
                       _buildLprCard(),
-                      const SizedBox(height: 8),
-                      _buildSectionHeader('高频跟踪'),
-                      _buildMacroCard('高炉开工率', _indicators['高炉开工率']),
-                      _buildMacroCard('30城商品房成交面积', _indicators['30城商品房成交']),
-                      _buildMacroCard('动力电池装机量', _indicators['动力电池装机']),
-                      _buildMacroCard('工业机器人产量增速', _indicators['机器人产量增速']),
-                      const SizedBox(height: 8),
-                      _buildSectionHeader('政策利率'),
-                      _buildMacroCard('社会融资规模', _indicators['社融规模']),
-                      _buildMacroCard('MLF操作利率', _indicators['MLF利率']),
-                      const SizedBox(height: 8),
-                      _buildSectionHeader('资产联动'),
-                      _buildMacroCard('美元/人民币汇率', _indicators['美元/人民币']),
-                      _buildMacroCard('10年期国债收益率', _indicators['10Y国债收益率']),
                       const SizedBox(height: 32),
                     ],
                   ),

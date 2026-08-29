@@ -18,6 +18,7 @@ final marketApiProvider = Provider<MarketApi>((ref) {
   return MarketApi(
     realtimeSource: settings.realtimeSource,
     klineSource: settings.klineSource,
+    thinksApiKey: settings.thinksApiKey,
   );
 });
 final searchApiProvider = Provider<SearchApi>((_) => SearchApi());
@@ -114,6 +115,11 @@ class KlineNotifier extends StateNotifier<MarketState> {
         (klines: klines, params: params, requested: null),
       );
 
+      // 切主题会整树重建（MaterialApp 换 Key），本 provider 是 autoDispose，
+      // 可能在 await 期间就被释放；此时再赋值会抛
+      // "Bad state: Tried to use KlineNotifier after dispose was called"。
+      if (!mounted) return;
+
       _updateState(state.copyWith(
         quote: quote,
         klines: klines,
@@ -122,6 +128,8 @@ class KlineNotifier extends StateNotifier<MarketState> {
         period: period,
       ));
     } catch (e) {
+      // 同上：已释放则直接丢弃结果，避免二次抛出
+      if (!mounted) return;
       _updateState(state.copyWith(
         isLoading: false,
         error: e.toString(),

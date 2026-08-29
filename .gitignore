@@ -52,3 +52,8 @@ pubspec.lock
 
 # 本地临时目录（pub get 暂存）
 .tmp/
+
+# 本地构建产物与内存 dump（不进仓库）
+deploy_v1.11.0/
+deploy_v1.11.1/
+*.hprof

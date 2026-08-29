@@ -44,6 +44,15 @@ class StockCodeUtils {
     return '$market.$pure';
   }
 
+  /// 同花顺 thscode 格式: 600519.SH / 000001.SZ / 8xxxxx.BJ
+  /// 用于同花顺金融数据 API（BYOK）的兜底行情请求
+  static String toThsCode(String code) {
+    final pure = pureCode(format(code));
+    if (pure.startsWith('6') || pure.startsWith('9')) return '$pure.SH';
+    if (pure.startsWith('4') || pure.startsWith('8')) return '$pure.BJ';
+    return '$pure.SZ';
+  }
+
   /// 判断是否为有效的股票代码
   static bool isValid(String code) {
     final trimmed = code.trim();

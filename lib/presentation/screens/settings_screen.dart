@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme.dart';
 import '../../core/utils/app_logger.dart';
 import '../../core/utils/key_cipher.dart';
 import '../../data/models/data_source_config.dart';
+import '../../data/datasources/thinks_api.dart';
 import '../providers/settings_provider.dart';
 import '../providers/watchlist_provider.dart';
 
@@ -24,6 +26,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _connectionStatus = '未连接';
   Color _connectionColor = AppColors.textSecondary;
   bool _showAdvanced = false;
+  bool _testingThinks = false;
 
   @override
   void dispose() {
@@ -77,6 +80,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ]),
           _buildSection('AI 配置', [
             _buildApiKeyInput(settings.emApiKey),
+          ]),
+          _buildSection('同花顺数据源（BYOK）', [
+            _buildThinksApiKeyInput(settings.thinksApiKey),
           ]),
           _buildSection('数据源设置', [
             _buildDataSourceSelector('实时行情', settings.realtimeSource,
@@ -180,8 +186,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
             selected: {currentStyle},
             onSelectionChanged: (v) {
+              // 只改设置状态；AppColors 的同步统一由 main.dart 的
+              // AppColors.applyTheme 在重建前完成，此处不再手工同步。
               ref.read(settingsProvider.notifier).setColorStyle(v.first);
-              AppColors.setColorStyle(v.first);
             },
             style: ButtonStyle(
               backgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -892,12 +899,192 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            '点击编辑 · 在东方财富妙想 Skills 页面获取',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+          GestureDetector(
+            onTap: _openMxAdmin,
+            child: Text(
+              '点击上方填入 Key · 前往 ai.eastmoney.com/mxClaw 自助获取 ›',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 11,
+                decoration: TextDecoration.underline,
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildThinksApiKeyInput(String currentKey) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('同花顺金融数据 API Key', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _showEditThinksApiKeyDialog(currentKey),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, color: AppColors.textSecondary, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      KeyCipher.mask(currentKey),
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'monospace'),
+                    ),
+                  ),
+                  Icon(Icons.edit, color: AppColors.textSecondary, size: 16),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: _openThinksAdmin,
+            child: Text(
+              '点击上方填入 Key · 前往 fuyao.aicubes.cn/admin 自助获取 ›',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 11,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _testingThinks ? null : _testThinksConnection,
+              icon: _testingThinks
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.network_check, size: 16),
+              label: Text(_testingThinks ? '测试中...' : '测试连接',
+                  style: const TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEditThinksApiKeyDialog(String currentKey) async {
+    final controller = TextEditingController(text: currentKey);
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: Text('设置同花顺 API Key', style: TextStyle(color: AppColors.textPrimary)),
+        content: TextField(
+          controller: controller,
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: '粘贴你的同花顺统一 API Key',
+            hintStyle: TextStyle(color: AppColors.textSecondary),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('取消', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) {
+                ref.read(settingsProvider.notifier).setThinksApiKey(value);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('同花顺 API Key 已保存'), duration: Duration(seconds: 1)),
+                );
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('保存', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openThinksAdmin() async {
+    final url = Uri.parse('https://fuyao.aicubes.cn/admin/');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('无法打开链接: $e'), duration: const Duration(seconds: 2)),
+        );
+      }
+    }
+  }
+
+  Future<void> _openMxAdmin() async {
+    final url = Uri.parse('https://ai.eastmoney.com/mxClaw');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('无法打开链接: $e'), duration: const Duration(seconds: 2)),
+        );
+      }
+    }
+  }
+
+  Future<void> _testThinksConnection() async {
+    final key = ref.read(settingsProvider).thinksApiKey;
+    if (key.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先填入同花顺 API Key'), duration: Duration(seconds: 2)),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _testingThinks = true);
+    try {
+      final api = ThinksApi(apiKey: key);
+      final result = await api.testConnection();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result), duration: const Duration(seconds: 3)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('测试失败: $e'), duration: const Duration(seconds: 3)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _testingThinks = false);
+    }
   }
 }

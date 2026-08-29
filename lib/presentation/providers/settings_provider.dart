@@ -26,6 +26,7 @@ class AppSettings {
   final bool enablePeerCompare;
   final bool enableDeepAnalysis;
   final String emApiKey;
+  final String thinksApiKey;
   final DataSourceType realtimeSource;
   final DataSourceType klineSource;
   final DataSourceType newsSource;
@@ -48,6 +49,9 @@ class AppSettings {
     this.enablePeerCompare = true,
     this.enableDeepAnalysis = true,
     this.emApiKey = 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH',
+    // 纯 BYOK：不内置任何同花顺 Key，未配置时 UI 引导用户到设置页填写。
+    // 切勿在此硬编码凭据 —— 会随包分发、可被反编译提取。
+    this.thinksApiKey = '',
     this.realtimeSource = DataSourceType.auto,
     this.klineSource = DataSourceType.auto,
     this.newsSource = DataSourceType.auto,
@@ -71,6 +75,7 @@ class AppSettings {
     bool? enablePeerCompare,
     bool? enableDeepAnalysis,
     String? emApiKey,
+    String? thinksApiKey,
     DataSourceType? realtimeSource,
     DataSourceType? klineSource,
     DataSourceType? newsSource,
@@ -93,6 +98,7 @@ class AppSettings {
       enablePeerCompare: enablePeerCompare ?? this.enablePeerCompare,
       enableDeepAnalysis: enableDeepAnalysis ?? this.enableDeepAnalysis,
       emApiKey: emApiKey ?? this.emApiKey,
+      thinksApiKey: thinksApiKey ?? this.thinksApiKey,
       realtimeSource: realtimeSource ?? this.realtimeSource,
       klineSource: klineSource ?? this.klineSource,
       newsSource: newsSource ?? this.newsSource,
@@ -125,6 +131,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       storage.loadEnablePeerCompare(),
       storage.loadEnableDeepAnalysis(),
       storage.loadEmApiKey(),
+      storage.loadThinksApiKey(),
       storage.loadRealtimeSource(),
       storage.loadKlineSource(),
       storage.loadNewsSource(),
@@ -147,10 +154,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       enablePeerCompare: results[13] as bool,
       enableDeepAnalysis: results[14] as bool,
       emApiKey: results[15] as String,
-      realtimeSource: DataSourceConfig.fromString(results[16] as String),
-      klineSource: DataSourceConfig.fromString(results[17] as String),
-      newsSource: DataSourceConfig.fromString(results[18] as String),
-      fundFlowSource: DataSourceConfig.fromString(results[19] as String),
+      thinksApiKey: results[16] as String,
+      realtimeSource: DataSourceConfig.fromString(results[17] as String),
+      klineSource: DataSourceConfig.fromString(results[18] as String),
+      newsSource: DataSourceConfig.fromString(results[19] as String),
+      fundFlowSource: DataSourceConfig.fromString(results[20] as String),
     );
   }
 
@@ -232,6 +240,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> setEmApiKey(String value) async {
     state = state.copyWith(emApiKey: value);
     await _ref.read(settingsStorageProvider).saveEmApiKey(value);
+  }
+
+  Future<void> setThinksApiKey(String value) async {
+    state = state.copyWith(thinksApiKey: value);
+    await _ref.read(settingsStorageProvider).saveThinksApiKey(value);
   }
 
   Future<void> setRealtimeSource(DataSourceType value) async {

@@ -10,7 +10,8 @@ import '../../core/utils/rate_limiter.dart';
 /// 参考 Aeolus 项目实现
 class EmAiApi {
   static const _searchDataUrl = 'https://ai-saas.eastmoney.com/proxy/b/mcp/tool/searchData';
-  static const _stockPickUrl = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/stock-screen';
+  // 妙想选股正确端点：ai-saas selectSecurity（独立 selectType 字段 + em_api_key 头）
+  static const _stockPickUrl = 'https://ai-saas.eastmoney.com/proxy/b/mcp/tool/selectSecurity';
   static const _assistantBaseUrl = 'https://ai-saas.eastmoney.com/proxy/app-robo-advisor-api/assistant';
 
   final Dio _dio;
@@ -93,23 +94,28 @@ class EmAiApi {
   }
 
   /// AI 选股 — 自然语言筛选股票
-  Future<List<AiStockPick>> selectStocks(String query, {int pageSize = 20}) async {
+  /// [selectType] 市场类型（A股/港股/美股/基金/ETF/可转债/板块），作为独立字段传入
+  /// 端点：ai-saas selectSecurity，body={query, selectType}，header=em_api_key
+  Future<List<AiStockPick>> selectStocks(String query, {int pageSize = 20, String? selectType}) async {
     if (_apiKey.isEmpty) return [];
 
-    await RateLimiter.instance.wait('mkapi2.dfcfs.com');
+    await RateLimiter.instance.wait('ai-saas.eastmoney.com');
     try {
       final response = await _dio.post(
         _stockPickUrl,
         data: {
-          'keyword': query,
-          'pageNo': 1,
-          'pageSize': pageSize,
+          'query': query,
+          'selectType': selectType ?? 'A股',
         },
-        options: Options(headers: {'apikey': _apiKey}),
+        options: Options(headers: {'em_api_key': _apiKey}),
       );
 
       final data = response.data is String ? json.decode(response.data) : response.data;
-      return _parseStockScreenResult(data);
+      if (data is! Map<String, dynamic>) return [];
+      // selectSecurity 返回 {securityCount, partialResults(markdown 表格)}
+      final count = data['securityCount'];
+      if (count is int && count <= 0) return [];
+      return _parseSelectSecurityResult(data);
     } catch (e) {
       AppLog.instance.error('EmAiApi', 'selectStocks 失败: $e');
       return [];
@@ -256,31 +262,64 @@ class EmAiApi {
     return [];
   }
 
-  /// 解析选股结果
-  List<AiStockPick> _parseStockScreenResult(Map<String, dynamic> data) {
-    final status = data['status'];
-    if (status != null && status != 0) return [];
+  /// 解析 selectSecurity 结果：partialResults 为 Markdown 表格
+  /// 列通常为：序号 | 代码 | 名称 | 最新价 | 涨跌幅 | ...（表头/分隔行需跳过）
+  List<AiStockPick> _parseSelectSecurityResult(Map<String, dynamic> data) {
+    final partial = data['partialResults'];
+    if (partial is! String || partial.isEmpty) {
+      AppLog.instance.warn('EmAiApi', 'selectSecurity 无 partialResults');
+      return [];
+    }
 
-    final innerData = data['data'] as Map<String, dynamic>? ?? {};
-    final dataInner = innerData['data'] as Map<String, dynamic>? ?? {};
-    final result = dataInner['result'] as Map<String, dynamic>? ?? {};
-    final dataList = result['dataList'] as List? ?? [];
+    final picks = <AiStockPick>[];
+    for (final raw in partial.split('\n')) {
+      final line = raw.trim();
+      if (!line.startsWith('|')) continue;
+      if (line.contains('---')) continue; // 分隔行
+      if (line.contains('代码') && line.contains('名称')) continue; // 表头
 
-    return dataList.map((item) {
-      final code = item['SECURITY_CODE']?.toString() ?? '';
-      final name = item['SECURITY_SHORT_NAME']?.toString() ?? '';
-      final price = _toDouble(item['NEWEST_PRICE']);
-      final change = _toDouble(item['CHG']);
+      final cells = line
+          .split('|')
+          .where((c) => c.trim().isNotEmpty)
+          .map((c) => c.trim())
+          .toList();
+      if (cells.length < 4) continue;
 
-      return AiStockPick(
+      String? code;
+      String? name;
+      for (final c in cells) {
+        if (code == null && RegExp(r'^\d{6}(\.\w{2})?$').hasMatch(c)) {
+          code = c;
+        } else if (name == null && RegExp(r'[\u4e00-\u9fa5]').hasMatch(c)) {
+          name = c;
+        }
+      }
+      if (code == null || name == null) continue;
+
+      // 价格/涨跌幅取行内数值单元格（最后一个为涨跌幅，倒数第二个为最新价）
+      final nums = cells
+          .where((c) => RegExp(r'^-?\d+(\.\d+)?%?$').hasMatch(c))
+          .map((c) => c.replaceAll('%', ''))
+          .toList();
+      double price = 0;
+      double change = 0;
+      if (nums.length >= 2) {
+        price = _toDouble(nums[nums.length - 2]);
+        change = _toDouble(nums.last);
+      } else if (nums.length == 1) {
+        change = _toDouble(nums.first);
+      }
+
+      picks.add(AiStockPick(
         code: code,
         name: name,
         reason: '符合筛选条件',
         score: 0,
         price: price,
         changePercent: change,
-      );
-    }).toList();
+      ));
+    }
+    return picks;
   }
 
   /// 解析对话响应

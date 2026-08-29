@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// 应用颜色系统 — 全局动态主题
 /// 所有 getter 基于 [_isDarkMode] 和 [_colorStyle] 动态返回颜色
-/// 切换主题时设置标志位，下次 build 自动刷新
+///
+/// ⚠️ 响应式限制：这些 getter 是**静态**的，读取它们的 Widget 不会向
+/// [Theme] 注册依赖。因此切换主题时 Flutter **不会**把它们标脏重建，
+/// 只有整棵树被重建时才会重新取色。
+/// 解决方式见 [themeSignature] 与 `main.dart` 中 MaterialApp 的 ValueKey。
 class AppColors {
   // ── 主题标志位 ──
   static bool _isDarkMode = true;
@@ -11,8 +16,25 @@ class AppColors {
   static bool get isDarkMode => _isDarkMode;
   static String get colorStyle => _colorStyle;
 
-  static void setDarkMode(bool value) => _isDarkMode = value;
-  static void setColorStyle(String style) => _colorStyle = style;
+  /// 颜色系统的**唯一**同步入口。
+  ///
+  /// 历史 Bug：深色模式只在 `main.dart` 的 build 里同步，涨跌色风格却额外在
+  /// `settings_screen.dart` 手工调一次，两套逻辑不一致、容易漏同步。
+  /// 现在统一收敛到这里，任何地方要改主题/涨跌色都必须调用本方法。
+  static void applyTheme({
+    required bool isDarkMode,
+    required String colorStyle,
+  }) {
+    _isDarkMode = isDarkMode;
+    _colorStyle = colorStyle;
+  }
+
+  /// 与当前颜色配置一一对应的主题签名。
+  ///
+  /// 用于给 `MaterialApp` 生成 [ValueKey]：签名变化时 Key 变化 →
+  /// Flutter 丢弃旧 Element 树并重建整棵树 → 所有直接读取 `AppColors.*`
+  /// 的 Widget 重新执行 build 并取到新颜色。
+  static String get themeSignature => '${_isDarkMode ? 'dark' : 'light'}_$_colorStyle';
 
   // ── 基础色（暗色/亮色 自适应） ──
   static Color get background => _isDarkMode ? const Color(0xFF0a0a0a) : const Color(0xFFF5F5F5);
@@ -82,6 +104,8 @@ final darkTheme = ThemeData(
   appBarTheme: const AppBarTheme(
     backgroundColor: Color(0xFF0a0a0a),
     elevation: 0,
+    // 深色背景 → 浅色状态栏图标
+    systemOverlayStyle: SystemUiOverlayStyle.light,
   ),
   cardTheme: const CardThemeData(color: Color(0xFF1a1a2e)),
   textTheme: const TextTheme(
@@ -106,6 +130,9 @@ final lightTheme = ThemeData(
     backgroundColor: Color(0xFFF5F5F5),
     elevation: 0,
     foregroundColor: Color(0xFF1a1a1a),
+    // 浅色背景 → 深色状态栏图标（AppBar 的 AnnotatedRegion 会覆盖全局设置，
+    // 因此这里必须显式声明，否则浅色模式状态栏图标会看不见）
+    systemOverlayStyle: SystemUiOverlayStyle.dark,
   ),
   cardTheme: const CardThemeData(color: Color(0xFFFFFFFF)),
   textTheme: const TextTheme(

@@ -10,6 +10,7 @@ import '../widgets/chart/indicator_selector.dart';
 import '../widgets/chart/kline_chart_widget.dart';
 import '../widgets/common/error_widget.dart';
 import 'analysis_screen.dart';
+import 'valuation_screen.dart';
 import '../../app/theme.dart';
 
 class ChartScreen extends ConsumerStatefulWidget {
@@ -367,6 +368,19 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.read(klineProvider(widget.stockCode).notifier).load(period: _selectedPeriod, forceRefresh: true),
+          ),
+          IconButton(
+            icon: const Icon(Icons.assessment_outlined),
+            tooltip: '估值',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ValuationScreen(
+                  stockCode: widget.stockCode,
+                  stockName: state.quote.name.isNotEmpty ? state.quote.name : widget.stockCode,
+                ),
+              ),
+            ),
           ),
         ],
       ),
