@@ -47,14 +47,16 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       # 从 Secrets 还原 keystore 与签名配置（key.properties 已被 .gitignore 忽略）
+      # 注：此处使用本机 Android debug keystore（JKS），与本地构建同签名，
+      #     因此已装旧版（debug 签名）的用户可直接覆盖升级、无需卸载。
       - name: Decode keystore & write key.properties
         run: |
-          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > android/app/release-key.jks
-          echo "storeFile=release-key.jks" > android/key.properties
+          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > android/app/debug.jks
+          echo "storeFile=debug.jks" > android/key.properties
           echo "storePassword=${{ secrets.KEY_STORE_PASSWORD }}" >> android/key.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
-          echo "storeType=PKCS12" >> android/key.properties
+          echo "storeType=JKS" >> android/key.properties
 
       - name: Build release APK (R8 开启)
         run: flutter build apk --release
