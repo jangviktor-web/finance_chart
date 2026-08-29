@@ -37,12 +37,15 @@
 
 <div align="center">
 
-[![Latest APK](https://img.shields.io/badge/下载_v1.9.0-APK-E53935?style=for-the-badge&logo=android)](https://github.com/jangviktor-web/finance_chart/releases/download/v1.9.0/app-arm64-v8a-release.apk)
+[![Latest APK](https://img.shields.io/badge/下载_v1.11.2-APK-E53935?style=for-the-badge&logo=android)](https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.2/finance_chart_v1.11.2.apk)
 
 </div>
 
 | 版本 | 日期 | 更新内容 |
 |:---:|:---:|---|
+| **v1.11.2** | 2026-08-29 | GitHub Actions 自动构建发布 · 单包 APK · 纯 BYOK · 深浅色主题修复 |
+| **v1.11.1** | 2026-08-28 | 修复深浅色模式字体不随主题切换 · after-dispose 守卫 |
+| **v1.11.0** | 2026-08-27 | 同花顺(THS) 热度中心 · 估值快照 · THS 情绪容灾 |
 | **v1.9.0** | 2026-08-21 | 分架构 APK（3 包·体积减半）· 多源自动降级 · 华尔街见闻/财经日历 · 研报页 · 互动易 · R8 压缩 · 指标 isolate · 系统级 Key 存储 |
 | **v1.8.2** | 2026-06-22 | K 线缓存优化 · 强制刷新 · 实时重绘 · 公告 · 板块成分股 · 按名称搜索 |
 | **v1.7.3** | 2026-05-22 | 发现页内嵌热点列表 · API Key XOR 加密存储 · 脱敏显示 |
@@ -51,7 +54,7 @@
 | **v1.6.0** | 2026-05-21 | AI 热点 · AI 同业对比 · AI 深度分析 · 全局限流 |
 | **v1.4.0** | 2026-05-20 | 资金流向 · 北向深度 · 龙虎榜扩展 |
 
-> 📦 **v1.9.0 起改为分架构打包**：每个 Release 含 3 个 APK —— `app-arm64-v8a-release.apk`（**现代手机选这个**）、`app-armeabi-v7a-release.apk`（老旧 32 位机）、`app-x86_64-release.apk`（模拟器/ChromeOS）。功能完全一致，只是安装包更小。**详见下方「v1.9.0 重要变更」**。
+> 📦 **v1.11.2 起改为单个通用 APK**：每个 Release 只含 1 个 `finance_chart_vX.Y.Z.apk`（fat APK，同时内置 arm64 / armeabi-v7a / x86_64 运行库，一个文件通吃所有设备），安装包约 30–40MB。**分架构瘦身背景见下方「v1.9.0 重要变更」**。
 >
 > 完整版本列表见 [Releases](https://github.com/jangviktor-web/finance_chart/releases) · 变更详情见 [CHANGELOG](CHANGELOG.md)
 
@@ -125,6 +128,15 @@
 - **AI 对话** — 聊天气泡界面，快捷操作芯片
 - **热点发现** — 市场热点列表，支持自定义查询，点击查看详情
 - **同业对比** — 中文名 / 代码搜索联想，经营 + 估值双表对比
+
+### 🔥 同花顺(THS) 热度中心
+
+- **连板天梯** — 连板高度排行，捕捉市场最高辨识度龙头
+- **盘中异动** — 实时异动个股，涨速 / 成交额 / 板块联动一目了然
+- **热股榜** — 人气热度排行，题材强弱尽收眼底
+- **飙升榜** — 快速拉升个股监控
+- **估值快照** — 个股 PE / PB / PS / PCF 估值卡片
+- **情绪容灾** — 东方财富情绪数据异常时自动回退同花顺备用端点
 
 ### 💰 资金流向
 
@@ -240,13 +252,11 @@ flutter pub get
 flutter build apk --release
 ```
 
-输出（分架构打包，默认产出 3 个独立 APK）：
+输出（默认单包，一个 APK 通吃所有架构）：
 ```
-build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   # 现代手机（推荐）
-build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk # 老旧 32 位机
-build/app/outputs/flutter-apk/app-x86_64-release.apk      # 模拟器 / ChromeOS
+build/app/outputs/flutter-apk/app-release.apk   # 通用包（CI 已重命名为 finance_chart_vX.Y.Z.apk 发布）
 ```
-> 若想一次打全架构通用包，用 `flutter build apk --release --split-per-abi` 的互补方式（去掉 `android/app/build.gradle.kts` 里的 `splits` 配置即可）。
+> 当前 `android/app/build.gradle.kts` 中 `splits { abi { isEnable = false } }`，即默认产单个通用 APK；如需分架构瘦身可改 `true`（需内存充裕的机器，否则 R8 并发易 OOM）。
 
 ---
 
@@ -274,6 +284,9 @@ build/app/outputs/flutter-apk/app-x86_64-release.apk      # 模拟器 / ChromeOS
 
 | 版本 | 日期 | 更新 |
 |---|---|---|
+| v1.11.2 | 2026-08-29 | GitHub Actions 自动构建发布 · 单包 APK · 纯 BYOK · 深浅色主题修复 |
+| v1.11.1 | 2026-08-28 | 修复深浅色模式字体不随主题切换 · after-dispose 守卫 |
+| v1.11.0 | 2026-08-27 | 同花顺(THS) 热度中心 · 估值快照 · THS 情绪容灾 |
 | v1.9.0 | 2026-08-21 | 分架构 APK · 多源自动降级 · 华尔街见闻/财经日历 · 研报页 · 互动易 · R8 压缩 · 指标 isolate · 系统级 Key 存储 |
 | v1.8.1 | 2026-06-22 | K 线缓存优化 · 强制刷新 · 实时重绘 |
 | v1.8.0 | 2026-06-22 | 东财公告 · 板块成分股 · 按名称搜索新闻 · RateLimiter 容错增强 |
