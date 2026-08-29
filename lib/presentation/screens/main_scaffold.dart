@@ -3,39 +3,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../data/datasources/search_api.dart';
+import '../providers/navigation_provider.dart';
 import 'home_screen.dart';
 import 'strategy_screen.dart';
 import 'discover_screen.dart';
 import 'settings_screen.dart';
 import 'chart_screen.dart';
+import 'ths_hot_screen.dart';
 
 /// 主框架 — 底部导航
-class MainScaffold extends ConsumerStatefulWidget {
+///
+/// 选中 Tab 保存在 [navIndexProvider] 而非局部 State：切主题时 MaterialApp
+/// 会换 Key 重建整棵树，局部 State 会丢失，用户会被弹回首页。
+class MainScaffold extends ConsumerWidget {
   const MainScaffold({super.key});
 
   @override
-  ConsumerState<MainScaffold> createState() => _MainScaffoldState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentIndex = ref.watch(navIndexProvider);
 
-class _MainScaffoldState extends ConsumerState<MainScaffold> {
-  int _currentIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
-        children: const [
+        index: currentIndex,
+        // 这里刻意不加 const：const 实例会被规范化复用，父级重建时
+        // updateChild 会因 `child.widget == newWidget` 直接跳过子树重建，
+        // 导致子树里的 AppColors.* 永远读不到新颜色。
+        children: [
           HomeScreen(),
           _AnalysisTab(),
           StrategyScreen(),
           DiscoverScreen(),
+          ThsHotScreen(),
           SettingsScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        selectedIndex: currentIndex,
+        onDestinationSelected: (i) =>
+            ref.read(navIndexProvider.notifier).state = i,
         backgroundColor: AppColors.background,
         indicatorColor: AppColors.primary.withOpacity(0.2),
         destinations: [
@@ -58,6 +63,11 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
             icon: Icon(Icons.explore_outlined, color: AppColors.textSecondary),
             selectedIcon: Icon(Icons.explore, color: AppColors.primary),
             label: '发现',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.whatshot_outlined, color: AppColors.textSecondary),
+            selectedIcon: Icon(Icons.whatshot, color: AppColors.primary),
+            label: '热度',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined, color: AppColors.textSecondary),

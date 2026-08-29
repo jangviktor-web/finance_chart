@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -30,25 +33,56 @@ android {
         }
     }
 
-    // 分架构打包：flutter build apk 默认产出 arm64-v8a / armeabi-v7a / x86_64 三个独立 APK，
-    // universalApk=false 表示不再额外打全架构通用包（上架/分发只需发 arm64-v8a 包覆盖 99%+ 新机）。
+    // 分架构打包：开启后会产出 arm64-v8a / armeabi-v7a / x86_64 三个独立 APK
+    // 外加一份全架构通用包，便于"按机型分发更小的包"。
+    //
+    // ⚠️ 当前关闭原因：本机开启 splits 后，多 ABI 并发构建叠加 R8 会把
+    // Metaspace 打爆（实测 8m57s 后 `FAILURE: Metaspace` OOM，见 2026-08-29 记录）。
+    // R8 混淆对发布质量（包体 + 防反编译）的价值远高于分架构瘦身，
+    // 故保留 R8、关闭 splits，只产全架构通用包。
+    // 若将来换到内存充裕的机器/CI，把 isEnable 改回 true 即可。
     splits {
         abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = false
+            isEnable = false
+        }
+    }
+
+    // —— 正式签名（CI 自动发布用）——
+    // 读取 android/key.properties（已被 .gitignore 忽略，不会进仓库）。
+    // 本地无 key.properties 时回退 debug 签名，保证本地 `flutter build apk --release` 不受影响。
+    val keystorePropsFile = rootProject.file("key.properties")
+    val keystoreProps = Properties()
+    if (keystorePropsFile.exists()) {
+        keystoreProps.load(FileInputStream(keystorePropsFile))
+    }
+    val hasReleaseKey = keystorePropsFile.exists() &&
+            keystoreProps["storeFile"] != null &&
+            keystoreProps["keyAlias"] != null &&
+            keystoreProps["storePassword"] != null &&
+            keystoreProps["keyPassword"] != null
+
+    if (hasReleaseKey) {
+        signingConfigs {
+            create("release") {
+                keyAlias = keystoreProps["keyAlias"] as String
+                keyPassword = keystoreProps["keyPassword"] as String
+                storeFile = file(keystoreProps["storeFile"] as String)
+                storePassword = keystoreProps["storePassword"] as String
+                val st = keystoreProps["storeType"]
+                if (st != null) storeType = st as String
+            }
         }
     }
 
     buildTypes {
         release {
-            // TODO: 上架前必须替换为正式 release keystore（当前用 debug 签名仅便于本地调试）。
-            // 配置方式：
-            //   1. 生成 keystore：keytool -genkey -v -keystore release.jks -alias release -keyalg RSA -keysize 2048 -validity 10000
-            //   2. 在 android/key.properties 填入 storeFile/storePassword/keyAlias/keyPassword
-            //   3. 启用下方 signingConfigs.release 块并改为 signingConfig = signingConfigs.getByName("release")
-            signingConfig = signingConfigs.getByName("debug")
+            // CI 有 key.properties（由 GitHub Actions 从 Secrets 写入）→ 用正式 keystore 签名；
+            // 本地无 key.properties → 回退 debug 签名，便于调试。
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             // P0-1: 开启 R8 压缩/混淆（显著减小包体并防止简单反编译）
             isMinifyEnabled = true
             isShrinkResources = true

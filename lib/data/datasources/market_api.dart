@@ -7,12 +7,16 @@ import 'package:fast_gbk/fast_gbk.dart';
 import '../models/kline_data.dart';
 import '../models/realtime_quote.dart';
 import '../models/data_source_config.dart';
+import '../models/financial_data.dart';
+import '../models/auction_data.dart';
+import '../models/fund_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/errors/api_exception.dart';
 import '../../core/utils/stock_code_utils.dart';
 import '../../core/utils/rate_limiter.dart';
 import 'local/cache_manager.dart';
 import 'baidu_api.dart';
+import 'thinks_api.dart';
 
 /// 行情数据 API — 多数据源支持
 class MarketApi {
@@ -20,13 +24,20 @@ class MarketApi {
   final BaiduApi _baiduApi;
   final DataSourceType realtimeSource;
   final DataSourceType klineSource;
+  final String thinksApiKey;
+  ThinksApi? _thinksApi;
 
   MarketApi({
     Dio? dio,
     this.realtimeSource = DataSourceType.auto,
     this.klineSource = DataSourceType.auto,
+    this.thinksApiKey = '',
   })  : _dio = dio ?? _createDio(),
-        _baiduApi = BaiduApi();
+        _baiduApi = BaiduApi() {
+    if (thinksApiKey.isNotEmpty) {
+      _thinksApi = ThinksApi(apiKey: thinksApiKey);
+    }
+  }
 
   static Dio _createDio() {
     final d = Dio(BaseOptions(
@@ -40,6 +51,154 @@ class MarketApi {
     // 重试拦截器
     d.interceptors.add(RetryInterceptor(maxRetries: 2));
     return d;
+  }
+
+  // ──────────── 同花顺财务数据（BYOK，需用户配置 Key）────────────
+
+  /// 获取同花顺三大报表（利润表/资产负债表/现金流量表）
+  /// type: income | balance | cashflow
+  /// 返回解析后的多期报表；未配置 Key 时抛 ApiException
+  Future<FinancialStatement> getFinancials(
+    String code,
+    String type, {
+    String period = 'annual',
+    int limit = 4,
+  }) async {
+    if (_thinksApi == null) {
+      throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    }
+    final thsCode = StockCodeUtils.toThsCode(code);
+    late Map<String, dynamic> res;
+    switch (type) {
+      case 'income':
+        res = await _thinksApi!.getIncomeStatements(thscode: thsCode, period: period, limit: limit);
+        break;
+      case 'balance':
+        res = await _thinksApi!.getBalanceSheets(thscode: thsCode, period: period, limit: limit);
+        break;
+      case 'cashflow':
+        res = await _thinksApi!.getCashFlowStatements(thscode: thsCode, period: period, limit: limit);
+        break;
+      default:
+        throw ApiException('未知报表类型: $type');
+    }
+    if (!res['ok']) throw ApiException(res['error']?.toString() ?? '同花顺财务数据获取失败');
+    return parseStatement(res['data'] as Map<String, dynamic>);
+  }
+
+  /// 获取同花顺财务指标（单报告期五类指标）
+  /// report 格式 'YYYY-[1-4]'（1=一季报/2=中报/3=三季报/4=年报）。
+  Future<List<FinancialIndicatorGroup>> getFinancialIndicators(
+    String code,
+    String report,
+  ) async {
+    if (_thinksApi == null) {
+      throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    }
+    final thsCode = StockCodeUtils.toThsCode(code);
+    final res = await _thinksApi!.getIndicators(thscode: thsCode, report: report);
+    if (!res['ok']) throw ApiException(res['error']?.toString() ?? '同花顺财务指标获取失败');
+    return parseIndicators(res['data'] as Map<String, dynamic>);
+  }
+
+  /// 获取同花顺集合竞价快照（单只 A 股）
+  /// stage: 'live' 竞价实时 / 'final' 竞价终态
+  Future<AuctionSnapshot> getAuctionSnapshot(String code, {String stage = 'final'}) async {
+    if (_thinksApi == null) {
+      throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    }
+    final thsCode = StockCodeUtils.toThsCode(code);
+    final res = await _thinksApi!.getAuctionSnapshot([thsCode], stage: stage);
+    if (!res['ok']) throw ApiException(res['error']?.toString() ?? '同花顺集合竞价获取失败');
+    final data = res['data'];
+    final item = _firstAuctionItem(data);
+    if (item == null) throw ParseException('同花顺集合竞价无数据: $thsCode');
+    return AuctionSnapshot.fromMap(item);
+  }
+
+  Map<String, dynamic>? _firstAuctionItem(dynamic data) {
+    if (data is! Map<String, dynamic>) return null;
+    final item = data['item'];
+    if (item is List && item.isNotEmpty && item.first is Map<String, dynamic>) {
+      return item.first as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  // ──────────── 公募基金（BYOK，需用户配置同花顺 Key）────────────
+
+  /// 搜索公募基金（按代码/名称），返回带资产类别的标的列表
+  Future<List<Map<String, dynamic>>> searchFunds(String query, {String assetType = 'fund-otc,fund-etf,fund-lof,fund-reits'}) async {
+    if (_thinksApi == null) throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    return _thinksApi!.searchTicker(query, limit: 20, assetType: assetType);
+  }
+
+  /// 基金基本资料
+  Future<FundProfile> getFundProfile(String fundType, String thscode) async {
+    if (_thinksApi == null) throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    final res = await _thinksApi!.getFundProfile(fundType, thscode);
+    if (!res['ok']) throw ApiException(res['error']?.toString() ?? '基金资料获取失败');
+    return FundProfile.fromMap(_firstFundItem(res['data']) ?? <String, dynamic>{});
+  }
+
+  /// 基金区间收益
+  Future<FundReturns> getFundReturns(String fundType, String thscode) async {
+    if (_thinksApi == null) throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    final res = await _thinksApi!.getFundReturns(fundType, thscode);
+    if (!res['ok']) throw ApiException(res['error']?.toString() ?? '基金收益获取失败');
+    return FundReturns.fromMap(_firstFundItem(res['data']) ?? <String, dynamic>{});
+  }
+
+  /// 基金净值序列（最新点 + 区间）
+  Future<List<FundNavPoint>> getFundNav(String fundType, String thscode, {String range = 'year'}) async {
+    if (_thinksApi == null) throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    final res = await _thinksApi!.getFundNav(fundType, thscode, range: range);
+    if (!res['ok']) throw ApiException(res['error']?.toString() ?? '基金净值获取失败');
+    final data = res['data'];
+    final item = data is Map && data['item'] is List ? data['item'] as List : <dynamic>[];
+    final out = <FundNavPoint>[];
+    for (final e in item) {
+      if (e is! Map<String, dynamic>) continue;
+      final ms = _toInt(e['nav_date']);
+      if (ms == 0) continue;
+      out.add(FundNavPoint(
+        navDateMs: ms,
+        unitNav: e['unit_nav'] is num ? (e['unit_nav'] as num).toDouble() : null,
+        adjNav: e['adj_nav'] is num ? (e['adj_nav'] as num).toDouble() : null,
+      ));
+    }
+    out.sort((a, b) => a.navDateMs.compareTo(b.navDateMs));
+    return out;
+  }
+
+  /// 基金重仓股
+  Future<List<FundHolding>> getFundHoldings(String fundType, String thscode) async {
+    if (_thinksApi == null) throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+    final res = await _thinksApi!.getFundHoldings(fundType, thscode);
+    if (!res['ok']) throw ApiException(res['error']?.toString() ?? '基金持仓获取失败');
+    final data = res['data'];
+    final item = data is Map && data['item'] is List ? data['item'] as List : <dynamic>[];
+    final out = <FundHolding>[];
+    for (final e in item) {
+      if (e is! Map<String, dynamic>) continue;
+      out.add(FundHolding.fromMap(e));
+    }
+    return out;
+  }
+
+  Map<String, dynamic>? _firstFundItem(dynamic data) {
+    if (data is! Map<String, dynamic>) return null;
+    final item = data['item'];
+    if (item is List && item.isNotEmpty && item.first is Map<String, dynamic>) {
+      return item.first as Map<String, dynamic>;
+    }
+    if (item is Map<String, dynamic>) return item;
+    return null;
+  }
+
+  int _toInt(dynamic v) {
+    if (v == null || v is! num) return 0;
+    return v.toInt();
   }
 
   // ──────────── 实时行情 ────────────
@@ -57,6 +216,12 @@ class MarketApi {
         return await _getRealtimeFromEastmoney(code);
       } else if (realtimeSource == DataSourceType.baidu) {
         return await _baiduApi.getRealtime(code);
+      } else if (realtimeSource == DataSourceType.thinks) {
+        // 同花顺 BYOK 作为第一梯队可选源（需用户已配置 Key）
+        if (_thinksApi == null) {
+          throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+        }
+        return await _getRealtimeFromThinks(code);
       } else {
         // auto 模式：腾讯 → 百度 → 东财（S2：东财风控最高，仅作最后兜底）
         try {
@@ -65,7 +230,15 @@ class MarketApi {
           try {
             return await _baiduApi.getRealtime(code);
           } catch (e2) {
-            return await _getRealtimeFromEastmoney(code);
+            try {
+              return await _getRealtimeFromEastmoney(code);
+            } catch (e3) {
+              // 同花顺 BYOK 兜底（仅当用户已配置 Key）
+              if (_thinksApi != null) {
+                return await _getRealtimeFromThinks(code);
+              }
+              rethrow;
+            }
           }
         }
       }
@@ -168,6 +341,44 @@ class MarketApi {
     }
   }
 
+  /// 同花顺实时行情（BYOK 兜底源）
+  /// snapshot 不返回中文名，单独以 ticker 消歧取名字（失败则回退纯代码）
+  Future<RealtimeQuote> _getRealtimeFromThinks(String code) async {
+    final thsCode = StockCodeUtils.toThsCode(code);
+    final res = await _thinksApi!.getSnapshot([thsCode]);
+    if (!res['ok']) {
+      throw ApiException(res['error']?.toString() ?? '同花顺行情获取失败');
+    }
+
+    final item = _firstSnapshotItem(res['data']);
+    if (item == null) throw ParseException('同花顺快照无数据: $thsCode');
+
+    final ticker = item['ticker']?.toString() ?? StockCodeUtils.pureCode(thsCode);
+    String name = ticker;
+    try {
+      final found = await _thinksApi!.searchTicker(ticker, limit: 1);
+      if (found.isNotEmpty) {
+        name = found.first['name']?.toString() ??
+            found.first['secu_name']?.toString() ??
+            ticker;
+      }
+    } catch (_) {
+      // 名字仅用于展示，消歧失败不影响行情
+    }
+
+    return RealtimeQuote(
+      code: StockCodeUtils.format(code).toUpperCase(),
+      name: name,
+      now: _toDouble(item['last_price']),
+      yesterday: _toDouble(item['prev_price']),
+      high: _toDouble(item['high_price']),
+      low: _toDouble(item['low_price']),
+      volume: _toDouble(item['volume']),
+      amount: _toDouble(item['turnover']),
+      time: _toDateTimeMs(item['timestamp']) ?? DateTime.now(),
+    );
+  }
+
   // ──────────── 历史 K 线 ────────────
 
   /// 获取历史 K 线 — 根据配置选择数据源（带缓存+限流）
@@ -198,6 +409,15 @@ class MarketApi {
         return await _getKlineFromSina(code, period, count);
       } else if (klineSource == DataSourceType.tencent) {
         return await _getKlineFromTencent(code, period, count);
+      } else if (klineSource == DataSourceType.thinks) {
+        // 同花顺 BYOK 作为第一梯队可选源（仅日线；需用户已配置 Key）
+        if (_thinksApi == null) {
+          throw ApiException('未配置同花顺 API Key，请先到设置页填入');
+        }
+        if (period != 'day') {
+          throw ApiException('同花顺 K 线仅支持日线');
+        }
+        return await _getKlineFromThinks(code, period, count);
       } else {
         // auto 模式（S2）：腾讯+新浪 竞速（低风控源优先），全部失败再兜底东财
         // 注：百度 K 线接口当前不可用（返回空），故不加入竞速池
@@ -214,7 +434,15 @@ class MarketApi {
           return await _race(sources);
         } catch (_) {
           // 东财风控最高，仅在低风控源全部失败时兜底
-          return await _getKlineFromEastMoney(code, period, count);
+          try {
+            return await _getKlineFromEastMoney(code, period, count);
+          } catch (e) {
+            // 同花顺 BYOK 兜底（仅日线，且仅当用户已配置 Key）
+            if (_thinksApi != null && period == 'day') {
+              return await _getKlineFromThinks(code, period, count);
+            }
+            rethrow;
+          }
         }
       }
     }
@@ -434,6 +662,77 @@ class MarketApi {
         return null;
       }
     }).whereType<KlineData>().toList();
+  }
+
+  /// 同花顺历史 K 线（BYOK 兜底源，仅支持日线 1d）
+  Future<List<KlineData>> _getKlineFromThinks(String code, String period, int count) async {
+    final thsCode = StockCodeUtils.toThsCode(code);
+    final now = DateTime.now();
+    // 留足非交易日余量，避免不够 count 根；窗口上限 10 年
+    final start = now.subtract(Duration(days: count * 2 + 30));
+
+    final res = await _thinksApi!.getHistorical(
+      thscode: thsCode,
+      startMs: start.millisecondsSinceEpoch,
+      endMs: now.millisecondsSinceEpoch,
+      adjust: 'forward',
+    );
+    if (!res['ok']) {
+      throw ApiException(res['error']?.toString() ?? '同花顺K线获取失败');
+    }
+
+    final data = res['data'];
+    final item = data is Map && data['item'] is List ? data['item'] as List : null;
+    if (item == null || item.isEmpty) throw ParseException('同花顺K线无数据: $thsCode');
+
+    final results = <KlineData>[];
+    for (final raw in item) {
+      if (raw is! Map<String, dynamic>) continue;
+      final time = _toDateTimeMs(raw['date_ms']);
+      if (time == null) continue;
+      results.add(KlineData(
+        time: time,
+        open: _toDouble(raw['open_price']),
+        high: _toDouble(raw['high_price']),
+        low: _toDouble(raw['low_price']),
+        close: _toDouble(raw['close_price']),
+        volume: _toDouble(raw['volume']),
+        amount: _toDouble(raw['turnover']),
+      ));
+    }
+    if (results.isEmpty) throw ParseException('同花顺K线解析失败');
+
+    results.sort((a, b) => a.time.compareTo(b.time));
+    if (results.length > count) {
+      return results.sublist(results.length - count);
+    }
+    return results;
+  }
+
+  // ──────────── 同花顺字段辅助 ────────────
+
+  double _toDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
+  DateTime? _toDateTimeMs(dynamic v) {
+    if (v == null || v is! num) return null;
+    final ms = v.toInt();
+    // 毫秒级时间戳 13 位；秒级 10 位兜底
+    return ms.toString().length >= 12
+        ? DateTime.fromMillisecondsSinceEpoch(ms)
+        : DateTime.fromMillisecondsSinceEpoch(ms * 1000);
+  }
+
+  Map<String, dynamic>? _firstSnapshotItem(dynamic data) {
+    if (data is! Map<String, dynamic>) return null;
+    final item = data['item'];
+    if (item is List && item.isNotEmpty && item.first is Map<String, dynamic>) {
+      return item.first as Map<String, dynamic>;
+    }
+    return null;
   }
 
   // ──────────── 并行竞速 ────────────

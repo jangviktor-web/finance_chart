@@ -1,0 +1,71 @@
+name: Release APK
+
+# 触发：推送以 v 开头的 tag（如 v1.11.2）即自动构建并发布 Release
+on:
+  push:
+    tags:
+      - "v*"
+
+# 创建 Release 需要写权限
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 预拉取 NDK / build-tools 等 Android 构件（Flutter 管理的下载，确保 NDK 版本匹配）
+      - name: Precache Android artifacts
+        run: flutter precache --android
+
+      # 安装 Android SDK 命令行工具并接受协议
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # AGP 9.0.1 + compileSdk 35 需要对应平台与构建工具
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      # 从 Secrets 还原 keystore 与签名配置（key.properties 已被 .gitignore 忽略）
+      - name: Decode keystore & write key.properties
+        run: |
+          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > android/app/release-key.jks
+          echo "storeFile=release-key.jks" > android/key.properties
+          echo "storePassword=${{ secrets.KEY_STORE_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+          echo "storeType=PKCS12" >> android/key.properties
+
+      - name: Build release APK (R8 开启)
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk finance_chart_$GITHUB_REF_NAME.apk
+
+      - name: Publish to GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "finance_chart_*.apk"
+          token: ${{ github.token }}
+          name: ${{ github.ref_name }}
+          generateReleaseNotes: true

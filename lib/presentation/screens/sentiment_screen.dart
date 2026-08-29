@@ -1,25 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../data/datasources/sentiment_api.dart';
 import '../../data/models/sentiment_data.dart';
+import '../../presentation/providers/settings_provider.dart';
 import 'chart_screen.dart';
 
 /// 市场情绪页面 — 6 Tab
-class SentimentScreen extends StatefulWidget {
+class SentimentScreen extends ConsumerStatefulWidget {
   const SentimentScreen({super.key});
 
   @override
-  State<SentimentScreen> createState() => _SentimentScreenState();
+  ConsumerState<SentimentScreen> createState() => _SentimentScreenState();
 }
 
-class _SentimentScreenState extends State<SentimentScreen> with SingleTickerProviderStateMixin {
+class _SentimentScreenState extends ConsumerState<SentimentScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _api = SentimentApi();
+  late final SentimentApi _api;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 6, vsync: this);
+    // 读取同花顺 Key：非空时涨停/跌停池、龙虎榜将具备 THS 容灾能力
+    final thsKey = ref.read(settingsProvider).thinksApiKey;
+    _api = SentimentApi(thinksApiKey: thsKey);
   }
 
   @override

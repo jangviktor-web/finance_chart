@@ -1,15 +1,21 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../models/sentiment_data.dart';
+import 'thinks_api.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
 import '../../core/utils/rate_limiter.dart';
 
 /// 市场情绪 API — 多数据源降级
+///
+/// 东财为默认源；当设备 IP 被限流（返回空/异常）且用户配置了同花顺 Key 时，
+/// 涨停/跌停池、龙虎榜三个端点自动回退到同花顺 special-data 容灾源。
+/// 北向/融资融券/板块资金东财无同花顺等价端点，保持东财单源。
 class SentimentApi {
   final Dio _dio;
+  final ThinksApi? _thinksApi;
 
-  SentimentApi({Dio? dio})
+  SentimentApi({Dio? dio, String? thinksApiKey})
       : _dio = dio ?? Dio(BaseOptions(
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 15),
@@ -18,7 +24,10 @@ class SentimentApi {
             'Referer': 'https://quote.eastmoney.com/',
             'Accept': 'application/json, text/plain, */*',
           },
-        ));
+        )),
+        _thinksApi = (thinksApiKey != null && thinksApiKey.isNotEmpty)
+            ? ThinksApi(apiKey: thinksApiKey)
+            : null;
 
   /// 带重试 + 域名降级的 push 请求
   /// 主域名 push2 → 备用域名 push3，每个域名最多重试 maxRetries 次
@@ -53,8 +62,29 @@ class SentimentApi {
     try { return Uri.parse(url).host; } catch (_) { return 'unknown'; }
   }
 
-  /// 涨停池 — 通过 push2 clist API 筛选涨幅>=9.8%的股票
+  /// 涨停池 — 默认东财；东财空/失败且配置了同花顺 Key 时回退 THS
   Future<List<LimitStock>> getLimitUpPool({int limit = 80}) async {
+    List<LimitStock> em = [];
+    try {
+      em = await _fetchLimitUpPoolEm(limit);
+    } catch (e) {
+      AppLog.instance.error('SentimentApi', 'getLimitUpPool 东财失败: $e');
+    }
+    if (em.isNotEmpty) return em;
+
+    if (_thinksApi != null) {
+      try {
+        final ths = await _thinksApi.getLimitUpPoolThs(limit: limit);
+        if (ths.isNotEmpty) return ths;
+      } catch (e) {
+        AppLog.instance.error('SentimentApi', 'getLimitUpPool 同花顺容灾失败: $e');
+      }
+    }
+    return em;
+  }
+
+  /// 涨停池（东财源）
+  Future<List<LimitStock>> _fetchLimitUpPoolEm(int limit) async {
     final params = {
       'pn': '1',
       'pz': '$limit',
@@ -68,41 +98,57 @@ class SentimentApi {
       'fields': 'f2,f3,f5,f6,f12,f13,f14,f15,f16,f17',
     };
 
-    try {
-      final response = await _push2Retry(ApiEndpoints.sectorFlow, params);
-      final data = response.data is String ? json.decode(response.data) : response.data;
+    final response = await _push2Retry(ApiEndpoints.sectorFlow, params);
+    final data = response.data is String ? json.decode(response.data) : response.data;
 
-      if (data['data'] == null) return [];
-      final rows = (data['data']['diff'] as List?) ?? [];
+    if (data['data'] == null) return [];
+    final rows = (data['data']['diff'] as List?) ?? [];
 
-      return rows
-          .map((item) {
-            final code = (item['f12'] ?? '').toString();
-            final changePercent = _toDouble(item['f3']);
-            if (changePercent < 9.8) return null;
+    return rows
+        .map((item) {
+          final code = (item['f12'] ?? '').toString();
+          final changePercent = _toDouble(item['f3']);
+          if (changePercent < 9.8) return null;
 
-            final market = _getMarketPrefix(item);
-            return LimitStock(
-              code: '$market$code',
-              name: item['f14']?.toString() ?? '',
-              price: _toDouble(item['f2']),
-              changePercent: changePercent,
-              amount: _toDouble(item['f6']),
-              limitType: '涨停',
-              openCount: 0,
-            );
-          })
-          .where((item) => item != null)
-          .cast<LimitStock>()
-          .toList();
-    } catch (e) {
-      AppLog.instance.error('SentimentApi', 'getLimitUpPool 失败: $e');
-      return [];
-    }
+          final market = _getMarketPrefix(item);
+          return LimitStock(
+            code: '$market$code',
+            name: item['f14']?.toString() ?? '',
+            price: _toDouble(item['f2']),
+            changePercent: changePercent,
+            amount: _toDouble(item['f6']),
+            limitType: '涨停',
+            openCount: 0,
+          );
+        })
+        .where((item) => item != null)
+        .cast<LimitStock>()
+        .toList();
   }
 
-  /// 跌停池 — 通过 push2 clist API 筛选跌幅<=-9.8%的股票
+  /// 跌停池 — 默认东财；东财空/失败且配置了同花顺 Key 时回退 THS
   Future<List<LimitStock>> getLimitDownPool({int limit = 80}) async {
+    List<LimitStock> em = [];
+    try {
+      em = await _fetchLimitDownPoolEm(limit);
+    } catch (e) {
+      AppLog.instance.error('SentimentApi', 'getLimitDownPool 东财失败: $e');
+    }
+    if (em.isNotEmpty) return em;
+
+    if (_thinksApi != null) {
+      try {
+        final ths = await _thinksApi.getLimitDownPoolThs(limit: limit);
+        if (ths.isNotEmpty) return ths;
+      } catch (e) {
+        AppLog.instance.error('SentimentApi', 'getLimitDownPool 同花顺容灾失败: $e');
+      }
+    }
+    return em;
+  }
+
+  /// 跌停池（东财源）
+  Future<List<LimitStock>> _fetchLimitDownPoolEm(int limit) async {
     final params = {
       'pn': '1',
       'pz': '$limit',
@@ -116,46 +162,60 @@ class SentimentApi {
       'fields': 'f2,f3,f5,f6,f12,f13,f14,f15,f16,f17',
     };
 
-    try {
-      final response = await _push2Retry(ApiEndpoints.sectorFlow, params);
-      final data = response.data is String ? json.decode(response.data) : response.data;
+    final response = await _push2Retry(ApiEndpoints.sectorFlow, params);
+    final data = response.data is String ? json.decode(response.data) : response.data;
 
-      if (data['data'] == null) return [];
-      final rows = (data['data']['diff'] as List?) ?? [];
+    if (data['data'] == null) return [];
+    final rows = (data['data']['diff'] as List?) ?? [];
 
-      return rows
-          .map((item) {
-            final code = (item['f12'] ?? '').toString();
-            final changePercent = _toDouble(item['f3']);
-            if (changePercent > -9.8) return null;
+    return rows
+        .map((item) {
+          final code = (item['f12'] ?? '').toString();
+          final changePercent = _toDouble(item['f3']);
+          if (changePercent > -9.8) return null;
 
-            final market = _getMarketPrefix(item);
-            return LimitStock(
-              code: '$market$code',
-              name: item['f14']?.toString() ?? '',
-              price: _toDouble(item['f2']),
-              changePercent: changePercent,
-              amount: _toDouble(item['f6']),
-              limitType: '跌停',
-              openCount: 0,
-            );
-          })
-          .where((item) => item != null)
-          .cast<LimitStock>()
-          .toList();
-    } catch (e) {
-      AppLog.instance.error('SentimentApi', 'getLimitDownPool 失败: $e');
-      return [];
-    }
+          final market = _getMarketPrefix(item);
+          return LimitStock(
+            code: '$market$code',
+            name: item['f14']?.toString() ?? '',
+            price: _toDouble(item['f2']),
+            changePercent: changePercent,
+            amount: _toDouble(item['f6']),
+            limitType: '跌停',
+            openCount: 0,
+          );
+        })
+        .where((item) => item != null)
+        .cast<LimitStock>()
+        .toList();
   }
 
-  /// 龙虎榜
+  /// 龙虎榜 — 默认东财；东财空/失败且配置了同花顺 Key 时回退 THS
   Future<List<DragonTigerItem>> getDragonTiger({int days = 5, int limit = 30}) async {
-    final endDate = DateTime.now();
-    final startDate = endDate.subtract(Duration(days: days));
-    final start = '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
-    final end = '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
+    List<DragonTigerItem> em = [];
+    try {
+      em = await _fetchDragonTigerEm(days: days, limit: limit);
+    } catch (e) {
+      AppLog.instance.error('SentimentApi', 'getDragonTiger 东财失败: $e');
+    }
+    if (em.isNotEmpty) return em;
 
+    if (_thinksApi != null) {
+      try {
+        final ths = await _thinksApi.getDragonTigerThs();
+        if (ths.isNotEmpty) return ths;
+      } catch (e) {
+        AppLog.instance.error('SentimentApi', 'getDragonTiger 同花顺容灾失败: $e');
+      }
+    }
+    return em;
+  }
+
+  /// 龙虎榜（东财源）
+  Future<List<DragonTigerItem>> _fetchDragonTigerEm({int days = 5, int limit = 30}) async {
+    // 注意：datacenter-web 对 RPT_DAILYBILLBOARD_DETAILSNEW 使用
+    // filter=(TRADE_DATE>=...) 会返回 HTTP 400，故去掉 filter，
+    // 直接靠 sortColumns=TRADE_DATE + pageSize 取最新上榜记录。
     final params = {
       'sortColumns': 'TRADE_DATE,SECURITY_CODE',
       'sortTypes': '-1,1',
@@ -165,37 +225,31 @@ class SentimentApi {
       'columns': 'ALL',
       'source': 'WEB',
       'client': 'WEB',
-      'filter': '(TRADE_DATE>=\'$start\')(TRADE_DATE<=\'$end\')',
     };
 
-    try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
-      final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
-      final data = response.data is String ? json.decode(response.data) : response.data;
+    await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
+    final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
+    final data = response.data is String ? json.decode(response.data) : response.data;
 
-      if (data['result'] == null) return [];
-      final rows = data['result']['data'] as List? ?? [];
+    if (data['result'] == null) return [];
+    final rows = data['result']['data'] as List? ?? [];
 
-      return rows.map((item) {
-        final code = (item['SECURITY_CODE'] ?? '').toString();
-        final market = code.startsWith('6') ? 'sh' : 'sz';
-        return DragonTigerItem(
-          code: '$market$code',
-          name: item['SECURITY_NAME_ABBR']?.toString() ?? '',
-          changePercent: _toDouble(item['CHANGE_RATE']),
-          closePrice: _toDouble(item['CLOSE_PRICE']),
-          turnoverRate: _toDouble(item['TURNOVERRATE']),
-          netBuy: _toDouble(item['BILLBOARD_NET_AMT']) / 10000, // 元→万元
-          totalBuy: _toDouble(item['BILLBOARD_BUY_AMT']) / 10000,
-          totalSell: _toDouble(item['BILLBOARD_SELL_AMT']) / 10000,
-          reason: item['EXPLANATION']?.toString() ?? '',
-          date: DateTime.tryParse(item['TRADE_DATE']?.toString() ?? '') ?? DateTime.now(),
-        );
-      }).toList();
-    } catch (e) {
-      AppLog.instance.error('SentimentApi', 'getDragonTiger 失败: $e');
-      return [];
-    }
+    return rows.map((item) {
+      final code = (item['SECURITY_CODE'] ?? '').toString();
+      final market = code.startsWith('6') ? 'sh' : 'sz';
+      return DragonTigerItem(
+        code: '$market$code',
+        name: item['SECURITY_NAME_ABBR']?.toString() ?? '',
+        changePercent: _toDouble(item['CHANGE_RATE']),
+        closePrice: _toDouble(item['CLOSE_PRICE']),
+        turnoverRate: _toDouble(item['TURNOVERRATE']),
+        netBuy: _toDouble(item['BILLBOARD_NET_AMT']) / 10000, // 元→万元
+        totalBuy: _toDouble(item['BILLBOARD_BUY_AMT']) / 10000,
+        totalSell: _toDouble(item['BILLBOARD_SELL_AMT']) / 10000,
+        reason: item['EXPLANATION']?.toString() ?? '',
+        date: DateTime.tryParse(item['TRADE_DATE']?.toString() ?? '') ?? DateTime.now(),
+      );
+    }).toList();
   }
 
   /// 北向资金实时（多参数降级）

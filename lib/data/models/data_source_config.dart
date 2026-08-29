@@ -12,6 +12,9 @@ enum DataSourceType {
   /// 百度财经
   baidu,
 
+  /// 同花顺金融数据（BYOK，用户自备 Key）
+  thinks,
+
   /// 自动模式（按优先级降级）
   auto,
 }
@@ -58,6 +61,7 @@ class DataSourceConfig {
       case 'tencent': return DataSourceType.tencent;
       case 'sina': return DataSourceType.sina;
       case 'baidu': return DataSourceType.baidu;
+      case 'thinks': return DataSourceType.thinks;
       case 'auto': return DataSourceType.auto;
       default: return DataSourceType.auto;
     }
@@ -75,6 +79,7 @@ class DataSourceConfig {
       case DataSourceType.tencent: return '腾讯财经';
       case DataSourceType.sina: return '新浪财经';
       case DataSourceType.baidu: return '百度财经';
+      case DataSourceType.thinks: return '同花顺';
       case DataSourceType.auto: return '自动选择';
     }
   }
@@ -86,6 +91,7 @@ class DataSourceConfig {
       case DataSourceType.tencent: return '🐧';
       case DataSourceType.sina: return '📱';
       case DataSourceType.baidu: return '🔍';
+      case DataSourceType.thinks: return '🟠';
       case DataSourceType.auto: return '⚡';
     }
   }
