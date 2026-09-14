@@ -422,12 +422,12 @@ class MarketApi {
         // auto 模式（S2）：腾讯+新浪 竞速（低风控源优先），全部失败再兜底东财
         // 注：百度 K 线接口当前不可用（返回空），故不加入竞速池
         final sources = <DataSourceAttempt<List<KlineData>>>[
-          DataSourceAttempt('tencent', _getKlineFromTencent(code, period, count)),
+          DataSourceAttempt('tencent:ifzq.kline', () => _getKlineFromTencent(code, period, count)),
         ];
 
         // 新浪只支持日/周/月线
         if (['day', 'week', 'month'].contains(period)) {
-          sources.add(DataSourceAttempt('sina', _getKlineFromSina(code, period, count)));
+          sources.add(DataSourceAttempt('sina:cn_marketdata.kline', () => _getKlineFromSina(code, period, count)));
         }
 
         try {
