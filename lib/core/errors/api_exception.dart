@@ -60,3 +60,23 @@ class TimeoutException extends ApiException {
           stackTrace: stackTrace,
         );
 }
+
+/// 上游**业务空返回**（HTTP 200，但业务层说没有数据）。
+///
+/// [definitiveNoData] 是关键区分，决定它是否计入端点熔断（`SourceHealth`）：
+/// - `true` —— 上游明确答复「该标的没有这条数据」（东财实测文案「返回数据为空」）。
+///   这是**关于标的的事实**，不代表端点不健康，因此不该熔断；否则连续看几个无覆盖
+///   标的（港股/美股/ETF）就会把共享同一端点的正常标的请求一起误熔断 5 分钟。
+/// - `false` —— 限流/风控等**暂时性**业务空（如「服务器繁忙」）。仍按失败计入，
+///   保留熔断挡洪峰的作用。
+class EmptyResponseException extends ApiException {
+  final String url;
+  final String? upstreamMessage;
+  final bool definitiveNoData;
+
+  EmptyResponseException(this.url, {this.upstreamMessage, this.definitiveNoData = false})
+      : super(
+          '业务空返回: $url${upstreamMessage == null ? '' : ' ($upstreamMessage)'}',
+          source: 'upstream',
+        );
+}

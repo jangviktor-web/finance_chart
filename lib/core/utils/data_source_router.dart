@@ -127,7 +127,14 @@ Future<T> firstSuccess<T>(List<DataSourceAttempt<T>> attempts) async {
       remaining--;
       settleAllFailed();
     }).catchError((e) {
-      SourceHealth.recordFailure(a.name);
+      // 标的级「确定无数据」不是端点故障：端点显然活着并且答复了，清掉失败计数即可。
+      // ponytail: 判断只此一处，所有走 firstSuccess 的模块一并受益 —— 不必在每个调用点
+      // 各自防「连看几个无覆盖标的就把共享端点误熔断 5 分钟」。
+      if (e is EmptyResponseException && e.definitiveNoData) {
+        SourceHealth.recordSuccess(a.name);
+      } else {
+        SourceHealth.recordFailure(a.name);
+      }
       errors.add('${a.name}: $e');
       remaining--;
       settleAllFailed();

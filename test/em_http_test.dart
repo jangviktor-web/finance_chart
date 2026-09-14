@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:finance_chart/core/errors/api_exception.dart';
 import 'package:finance_chart/data/datasources/em_http.dart';
 
 /// 用拦截器短路请求，验证 getEmWithMirror 的镜像换域逻辑，
@@ -67,5 +68,40 @@ void main() {
     final main = 'https://datacenter-web.eastmoney.com/x';
     final dio = Dio()..interceptors.add(_MockInterceptor({main: 500}, {}));
     expect(() => getEmWithMirror(dio, main), throwsA(anything));
+  });
+
+  test('业务空且上游明说「返回数据为空」→ 标记为标的级无数据（不计端点熔断）', () async {
+    final main = 'https://datacenter-web.eastmoney.com/x';
+    final mirror = 'https://datacenter.eastmoney.com/x';
+    final noData = {'success': false, 'message': '返回数据为空', 'result': null};
+    final dio = Dio()
+      ..interceptors.add(_MockInterceptor({main: 200, mirror: 200}, {main: noData, mirror: noData}));
+
+    Object? caught;
+    try {
+      await getEmWithMirror(dio, main);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught, isA<EmptyResponseException>());
+    expect((caught as EmptyResponseException).definitiveNoData, isTrue);
+    expect(caught.upstreamMessage, '返回数据为空');
+  });
+
+  test('业务空但属暂时性（服务器繁忙）→ 不算标的级无数据，仍会熔断端点', () async {
+    final main = 'https://datacenter-web.eastmoney.com/x';
+    final mirror = 'https://datacenter.eastmoney.com/x';
+    final busy = {'success': false, 'message': '服务器繁忙'};
+    final dio = Dio()
+      ..interceptors.add(_MockInterceptor({main: 200, mirror: 200}, {main: busy, mirror: busy}));
+
+    Object? caught;
+    try {
+      await getEmWithMirror(dio, main);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught, isA<EmptyResponseException>());
+    expect((caught as EmptyResponseException).definitiveNoData, isFalse);
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../core/constants/api_endpoints.dart';
+import '../../core/errors/api_exception.dart';
 import '../../core/utils/rate_limiter.dart';
 
 /// 东财请求：主域失败自动换镜像域重试 —— 「同源不同机」冗余。
@@ -39,8 +40,13 @@ Future<Response> getEmWithMirror(
     try {
       await RateLimiter.instance.waitByUrl(u);
       final res = await dio.get(u, queryParameters: params);
-      if (_looksBusinessEmpty(res.data)) {
-        lastError = Exception('东财业务空返回: $u');
+      final empty = _classifyBusinessEmpty(res.data);
+      if (empty != null) {
+        lastError = EmptyResponseException(
+          u,
+          upstreamMessage: empty.message,
+          definitiveNoData: empty.definitive,
+        );
         continue;
       }
       return res;
@@ -51,19 +57,40 @@ Future<Response> getEmWithMirror(
   throw lastError ?? Exception('东财请求失败: $url');
 }
 
-/// 判断东财响应是否是「业务空」：显式 success=false，或 result/data 双双为 null。
-bool _looksBusinessEmpty(dynamic data) {
+/// 东财「业务空」的判定与分类。`null` 表示不是业务空（正常响应）。
+///
+/// - `definitive: true` —— 上游明确答复「该标的没有这条数据」。这是关于**标的**的事实，
+///   不是端点故障，故由 [EmptyResponseException] 带出去，让 `firstSuccess` 不把它算进
+///   端点熔断（否则连看几个无覆盖标的就会误熔断，连累正常标的）。
+/// - `definitive: false` —— 其余业务空（限流「服务器繁忙」、`result`/`data` 双 null 等），
+///   保持原语义计入失败，熔断挡洪峰的作用不受影响。
+///
+/// ponytail: 用**窄白名单**认「无数据」文案，而不是去穷举限流文案 —— 上游改文案时最坏
+/// 退化成旧行为（多熔断几次），不会反过来漏熔断。要调只需改 [_noDataMarkers]。
+({bool definitive, String? message})? _classifyBusinessEmpty(dynamic data) {
   dynamic body = data;
   if (body is String) {
     final s = body.trim();
-    if (s.isEmpty) return true;
+    if (s.isEmpty) return (definitive: false, message: null);
     try {
       body = json.decode(s);
     } catch (_) {
-      return false; // 非 JSON（如 JS 包裹）交给调用方处理
+      return null; // 非 JSON（如 JS 包裹）交给调用方处理
     }
   }
-  if (body is! Map) return false;
-  if (body['success'] == false) return true;
-  return body['result'] == null && body['data'] == null;
+  if (body is! Map) return null;
+  final msg = body['message']?.toString();
+  if (body['success'] == false) {
+    return (
+      definitive: msg != null && _noDataMarkers.any(msg.contains),
+      message: msg,
+    );
+  }
+  if (body['result'] == null && body['data'] == null) {
+    return (definitive: false, message: msg);
+  }
+  return null;
 }
+
+/// 上游表示「该标的没有数据」的文案特征（窄白名单，见 [_classifyBusinessEmpty]）。
+const List<String> _noDataMarkers = ['为空', '无数据', '不存在'];

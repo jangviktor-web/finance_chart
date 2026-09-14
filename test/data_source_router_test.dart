@@ -108,4 +108,69 @@ void main() {
     expect(called, isFalse);
     expect(blocked.single, contains('冷却中'));
   });
+
+  test('标的级「确定无数据」不计入端点熔断：连续 3 次仍不冷却', () async {
+    // 复现原缺陷：东财 F10 端点被所有标的共用，看 3 个无覆盖标的（港股/美股/ETF）
+    // 就会把端点误熔断 5 分钟，导致之后正常 A 股的请求被直接跳过。
+    const name = 'em:dc.f10_statement_income';
+    for (var i = 0; i < 3; i++) {
+      await expectLater(
+        firstSuccess<String>([
+          DataSourceAttempt(
+            name,
+            () => Future.error(EmptyResponseException(
+              'https://datacenter-web.eastmoney.com/api/data/v1/get',
+              upstreamMessage: '返回数据为空',
+              definitiveNoData: true,
+            )),
+          ),
+        ]),
+        throwsA(isA<NetworkException>()),
+      );
+    }
+    expect(SourceHealth.isBlocked(name), isFalse);
+  });
+
+  test('暂时性业务空（限流）仍计入熔断，保留挡洪峰能力', () async {
+    const name = 'em:dc.f10_statement_income';
+    for (var i = 0; i < 3; i++) {
+      await expectLater(
+        firstSuccess<String>([
+          DataSourceAttempt(
+            name,
+            () => Future.error(EmptyResponseException(
+              'https://datacenter-web.eastmoney.com/api/data/v1/get',
+              upstreamMessage: '服务器繁忙',
+            )),
+          ),
+        ]),
+        throwsA(isA<NetworkException>()),
+      );
+    }
+    expect(SourceHealth.isBlocked(name), isTrue);
+  });
+
+  test('「确定无数据」也清零先前的临时失败计数', () async {
+    const name = 'em:dc.f10_statement_income';
+    SourceHealth.recordFailure(name);
+    SourceHealth.recordFailure(name);
+
+    await expectLater(
+      firstSuccess<String>([
+        DataSourceAttempt(
+          name,
+          () => Future.error(EmptyResponseException(
+            'https://datacenter-web.eastmoney.com/api/data/v1/get',
+            upstreamMessage: '返回数据为空',
+            definitiveNoData: true,
+          )),
+        ),
+      ]),
+      throwsA(isA<NetworkException>()),
+    );
+
+    SourceHealth.recordFailure(name);
+    SourceHealth.recordFailure(name);
+    expect(SourceHealth.isBlocked(name), isFalse);
+  });
 }
