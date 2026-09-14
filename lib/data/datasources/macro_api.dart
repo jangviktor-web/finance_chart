@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/macro_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
-import '../../core/utils/rate_limiter.dart';
+import 'em_http.dart';
 import 'local/cache_manager.dart';
 
 /// 宏观经济数据 API — 东方财富
@@ -108,29 +108,36 @@ class MacroApi {
     final cached = CacheManager.instance.get<List<LprData>>(cacheKey);
     if (cached != null) return cached;
 
-    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
-    // 尝试 datacenter-web
+    // 尝试 datacenter-web（getEmWithMirror 内部会按实际使用的域名限流）
     try {
+      // 🔴 修正（2026-09-14 curl 实测）：
+      // 原 reportName `RPT_ECONOMY_LEND_RATE` 服务端返回
+      // `{"success":false,"message":"报表配置不存在,RPT_ECONOMY_LEND_RATE"}` —— 该报表
+      // 早已不存在，LPR 主源一直是死的，全靠下面的降级链在撑。
+      // 正确报表是 `RPTA_WEB_RATE`，且它没有 REPORT_DATE 列（用 REPORT_DATE 排序会报
+      // 「REPORT_DATE排序列不存在」），须按 TRADE_DATE 排序；字段名是 LPR1Y / LPR5Y。
+      // 实测返回：{"TRADE_DATE":"2026-08-20 00:00:00","LPR1Y":3,"LPR5Y":3.5,...}
       final params = {
-        'sortColumns': 'REPORT_DATE',
+        'sortColumns': 'TRADE_DATE',
         'sortTypes': '-1',
         'pageSize': '$limit',
         'pageNumber': '1',
-        'reportName': 'RPT_ECONOMY_LEND_RATE',
-        'columns': 'REPORT_DATE,LPR_1Y,LPR_5Y',
+        'reportName': 'RPTA_WEB_RATE',
+        'columns': 'TRADE_DATE,LPR1Y,LPR5Y',
         'source': 'WEB',
         'client': 'WEB',
       };
-      final response = await _dio.get(ApiEndpoints.macroLpr, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.macroLpr, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] != null) {
         final rows = data['result']['data'] as List? ?? [];
         if (rows.isNotEmpty) {
           final result = rows.map((item) => LprData(
-            date: _formatPeriod(item['REPORT_DATE']),
-            lpr1y: _toDouble(item['LPR_1Y']),
-            lpr5y: _toDouble(item['LPR_5Y']),
+            // _formatPeriod 取前 7 位 → "2026-08"，与兜底值的 'YYYY-MM' 形状一致
+            date: _formatPeriod(item['TRADE_DATE']),
+            lpr1y: _toDouble(item['LPR1Y']),
+            lpr5y: _toDouble(item['LPR5Y']),
           )).toList();
           CacheManager.instance.set(cacheKey, result, CacheManager.ttlMacro);
           return result;
@@ -165,12 +172,11 @@ class MacroApi {
       }
     } catch (_) {}
 
-    // 最终降级: 返回最近已知的 LPR 数据
+    // 最终降级: 返回最近一次**实测确认**的 LPR 值。
+    // 原值（2026-04 / 3.10 / 3.60 × 4 个月）是凭空的错数据 —— 实测 2026-08-20
+    // 已经是 1Y=3.0 / 5Y=3.5。宁可只给一条正确记录，也不编造另外三个月。
     final fallback = [
-      LprData(date: '2026-04', lpr1y: 3.10, lpr5y: 3.60),
-      LprData(date: '2026-03', lpr1y: 3.10, lpr5y: 3.60),
-      LprData(date: '2026-02', lpr1y: 3.10, lpr5y: 3.60),
-      LprData(date: '2026-01', lpr1y: 3.10, lpr5y: 3.60),
+      LprData(date: '2026-08', lpr1y: 3.0, lpr5y: 3.5),
     ];
     CacheManager.instance.set(cacheKey, fallback, CacheManager.ttlMacro);
     return fallback;
@@ -189,7 +195,8 @@ class MacroApi {
     final cached = CacheManager.instance.get<MacroIndicator>(cacheKey);
     if (cached != null) return cached;
 
-    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
+    // 不再在这里手动限流：getEmWithMirror 会按**实际使用的域名**限流
+    // （可能换到镜像域），手动 wait 主域会既限错域名又多等一次。
 
     final params = {
       'sortColumns': 'REPORT_DATE',
@@ -203,7 +210,8 @@ class MacroApi {
     };
 
     try {
-      final response = await _dio.get(ApiEndpoints.macroCpi, queryParameters: params);
+      // 主域 → 镜像域（实测 datacenter 与 datacenter-web 响应体字节级一致）
+      final response = await getEmWithMirror(_dio, ApiEndpoints.macroCpi, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       final List<MacroDataPoint> points = [];

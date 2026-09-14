@@ -5,6 +5,7 @@ import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
 import '../../core/utils/rate_limiter.dart';
 import '../../core/utils/stock_code_utils.dart';
+import 'em_http.dart';
 
 /// 资金流向 API — 个股/大盘/排行
 class FundFlowApi {
@@ -22,6 +23,12 @@ class FundFlowApi {
 
   /// 个股资金流向历史（日线）
   /// 返回最近 [days] 天的主力/大单/中单/小单/超大单净流入
+  ///
+  /// ⚠️ 本方法是全文件**唯一刻意不接镜像域**的调用，别"顺手优化"成
+  /// getEmWithMirror：`push2his/api/qt/stock/fflow/daykline/get` 是历史路径，
+  /// 而 push2delay 对该路径**不是镜像** —— 实测它只返回**当日 1 条**（HTTP 200，
+  /// 无任何错误信号），接上去会静默把历史资金流截断成一天。
+  /// `stock/kline` 同理（push2delay 返回空数组）。
   Future<List<FundFlowDetail>> getStockFundFlow(String code, {int days = 30}) async {
     await RateLimiter.instance.wait('push2his.eastmoney.com');
 
@@ -71,8 +78,6 @@ class FundFlowApi {
 
   /// 大盘实时资金流快照（上证+深证）
   Future<MarketFundFlow> getMarketFundFlow() async {
-    await RateLimiter.instance.wait('push2.eastmoney.com');
-
     final params = {
       'fltt': '2',
       'secids': '1.000001,0.399001',
@@ -80,7 +85,9 @@ class FundFlowApi {
     };
 
     try {
-      final response = await _dio.get(ApiEndpoints.marketFundFlow, queryParameters: params);
+      // ulist.np 是实时类路径，push2delay 镜像可用（实测两域名均返回真数据）；
+      // 主域被限流时自动换镜像域，限流则在 getEmWithMirror 内按实际域名进行。
+      final response = await getEmWithMirror(_dio, ApiEndpoints.marketFundFlow, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['data'] == null) return const MarketFundFlow();
@@ -118,8 +125,6 @@ class FundFlowApi {
     String period = 'today',
     int limit = 50,
   }) async {
-    await RateLimiter.instance.wait('push2.eastmoney.com');
-
     final indicatorMap = {
       'today': {'fid': 'f62', 'fields': 'f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87'},
       '3day':  {'fid': 'f267', 'fields': 'f12,f14,f2,f3,f267,f164,f269,f270,f273,f274,f275,f276,f277,f278'},
@@ -143,7 +148,8 @@ class FundFlowApi {
     };
 
     try {
-      final response = await _dio.get(ApiEndpoints.fundFlowRank, queryParameters: params);
+      // clist 是实时类路径，镜像可用（实测 push2delay 返回同结构真数据）
+      final response = await getEmWithMirror(_dio, ApiEndpoints.fundFlowRank, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['data'] == null) return [];
