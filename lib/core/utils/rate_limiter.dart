@@ -12,8 +12,12 @@ class RateLimiter {
     // 东方财富
     'push2.eastmoney.com': 500,         // 实时行情
     'push2his.eastmoney.com': 600,      // K线/资金流 — 最严格
-    'push3.eastmoney.com': 500,         // 备用
+    // 🔴 原为 push3.eastmoney.com —— 该域名 SSL 握手直接失败（DNS/证书均不通），
+    // 全 app 有 4 处降级指向它（sentiment_api / market_scanner / scan_screen），
+    // 等于降级形同虚设。改用实测可用的 push2 镜像域。
+    'push2delay.eastmoney.com': 500,    // push2 镜像（仅实时类路径）
     'datacenter-web.eastmoney.com': 600,// 数据中心
+    'datacenter.eastmoney.com': 600,    // datacenter-web 镜像（全量可用）
     'ai-saas.eastmoney.com': 1000,      // AI
     'mkapi2.dfcfs.com': 1000,           // AI选股
     'np-listapi.eastmoney.com': 500,    // 新闻
@@ -40,8 +44,9 @@ class RateLimiter {
     // 东方财富
     'push2.eastmoney.com': 1000,
     'push2his.eastmoney.com': 500,
-    'push3.eastmoney.com': 500,
+    'push2delay.eastmoney.com': 500,    // 独立配额桶 → 东财实际日额度翻倍
     'datacenter-web.eastmoney.com': 200,
+    'datacenter.eastmoney.com': 200,    // 独立配额桶
     'ai-saas.eastmoney.com': 50,
     'mkapi2.dfcfs.com': 50,
     'np-listapi.eastmoney.com': 300,
