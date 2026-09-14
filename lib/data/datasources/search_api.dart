@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../core/utils/rate_limiter.dart';
-import '../../core/utils/stock_code_utils.dart';
 
 /// 搜索结果
 class SearchResult {
@@ -48,14 +47,20 @@ class SearchApi {
         final code = item['Code']?.toString() ?? '';
         final name = item['Name']?.toString() ?? '';
         final marketNum = item['MktNum']?.toString() ?? '';
+        final quoteId = item['QuoteID']?.toString() ?? '';
 
         String formattedCode;
         if (marketNum == '1') {
           formattedCode = 'sh$code';
         } else if (marketNum == '0') {
           formattedCode = 'sz$code';
+        } else if (quoteId.contains('.')) {
+          // ponytail: 非沪深（港 116 / 美 105-107 / 京 / 板块）东财同一次响应里
+          // 已直接给出 secid（QuoteID），用它即可，无需猜 —— 原实现退到
+          // StockCodeUtils.format()，把港股 00700 拼成 sz00700，行情与K线全空。
+          formattedCode = quoteId;
         } else {
-          formattedCode = StockCodeUtils.format(code);
+          formattedCode = code;
         }
 
         return SearchResult(code: formattedCode, name: name);
