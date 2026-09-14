@@ -13,6 +13,10 @@ import '../../core/utils/rate_limiter.dart';
 /// 返回 HTTP 200 但 kline 是空数组、fflow 只有当日 1 条，会**静默丢数据**。
 /// 这类调用必须传 `allowMirror: false` 或干脆不走本函数。
 ///
+/// ⚠️ **本函数原样返回 `Response`，不做 JSON 解码**。东财 datacenter 系端点返回
+/// `Content-Type: text/plain`，dio 不会自动解，`res.data` 是 String —— 取数前必须自己
+/// decode（见各 datasource 里 `response.data is String ? json.decode(...) : response.data`）。
+///
 /// 什么算「失败」并触发换域：
 /// 1. 抛异常 / 超时 / 非 2xx；
 /// 2. **HTTP 200 但业务空** —— 东财限流与风控的典型形态是

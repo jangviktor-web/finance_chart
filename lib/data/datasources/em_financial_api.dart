@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/errors/api_exception.dart';
@@ -166,9 +167,23 @@ class EmFinancialApi {
   }
 
   /// 东财 `result.data[]`；形态异常返回空表（而非抛错），由调用方统一判「无数据」。
+  ///
+  /// ⚠️ 东财 datacenter 系端点返回 `Content-Type: text/plain`，dio 因此**不会**自动解
+  /// JSON，`res.data` 实际是 String —— 必须先 decode，否则会静默拿到空表
+  /// （表现为「无数据」而非报错，极难排查）。这是全项目 datacenter-web 调用方的统一补偿。
   static List<Map<String, dynamic>> rowsOf(dynamic data) {
-    if (data is! Map) return const [];
-    final result = data['result'];
+    dynamic body = data;
+    if (body is String) {
+      final s = body.trim();
+      if (s.isEmpty) return const [];
+      try {
+        body = jsonDecode(s);
+      } catch (_) {
+        return const []; // 非 JSON（如 JS 包裹）交给调用方判为无数据
+      }
+    }
+    if (body is! Map) return const [];
+    final result = body['result'];
     if (result is! Map) return const [];
     final rows = result['data'];
     if (rows is! List) return const [];
