@@ -85,6 +85,9 @@ class ApiEndpoints {
   static const String valuation = '$eastmoneyBase/api/data/v1/get';
   static const String blockTrades = '$eastmoneyBase/api/data/v1/get';
   static const String restrictedShares = '$eastmoneyBase/api/data/v1/get';
+  /// 东财 F10 财务数据（keyless）：利润表/资产负债表/现金流量表/主要指标**共用同一 URL**，
+  /// 靠 `reportName` 区分。挂在 datacenter-web 主机上，自动享受 datacenter 镜像域。
+  static const String f10Report = '$eastmoneyBase/api/data/v1/get';
 
   // ── 公告 ──
   static const String announcements = 'https://np-anotice-stock.eastmoney.com/api/security/ann';

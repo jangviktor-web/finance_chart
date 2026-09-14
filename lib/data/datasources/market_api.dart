@@ -14,6 +14,7 @@ import '../../core/errors/api_exception.dart';
 import '../../core/utils/data_source_router.dart';
 import '../../core/utils/stock_code_utils.dart';
 import '../../core/utils/rate_limiter.dart';
+import 'em_financial_api.dart';
 import 'local/cache_manager.dart';
 import 'baidu_api.dart';
 import 'thinks_api.dart';
@@ -26,6 +27,7 @@ class MarketApi {
   final DataSourceType klineSource;
   final String thinksApiKey;
   ThinksApi? _thinksApi;
+  late final EmFinancialApi _emFinancial = EmFinancialApi(_dio);
 
   MarketApi({
     Dio? dio,
@@ -55,18 +57,37 @@ class MarketApi {
 
   // ──────────── 同花顺财务数据（BYOK，需用户配置 Key）────────────
 
-  /// 获取同花顺三大报表（利润表/资产负债表/现金流量表）
+  /// 获取三大报表（利润表/资产负债表/现金流量表）
   /// type: income | balance | cashflow
-  /// 返回解析后的多期报表；未配置 Key 时抛 ApiException
+  ///
+  /// 源顺序：**东财 F10（keyless）**优先，同花顺（BYOK）作为并列兜底。
+  /// 两源字段已对齐到同一套 key，UI 无需感知来源差异。
   Future<FinancialStatement> getFinancials(
     String code,
     String type, {
     String period = 'annual',
     int limit = 4,
+  }) {
+    return firstSuccess<FinancialStatement>([
+      DataSourceAttempt(
+        'em:dc.f10_statement_$type',
+        () => _emFinancial.getStatement(code, type, period: period, limit: limit),
+      ),
+      if (_thinksApi != null)
+        DataSourceAttempt(
+          'thinks:financials_$type',
+          () => _fromThinksStatement(code, type, period: period, limit: limit),
+        ),
+    ]);
+  }
+
+  /// 同花顺三大报表（BYOK）。仅在配置了 Key 时被 [getFinancials] 挂进竞速列表。
+  Future<FinancialStatement> _fromThinksStatement(
+    String code,
+    String type, {
+    required String period,
+    required int limit,
   }) async {
-    if (_thinksApi == null) {
-      throw ApiException('未配置同花顺 API Key，请先到设置页填入');
-    }
     final thsCode = StockCodeUtils.toThsCode(code);
     late Map<String, dynamic> res;
     switch (type) {
@@ -86,15 +107,29 @@ class MarketApi {
     return parseStatement(res['data'] as Map<String, dynamic>);
   }
 
-  /// 获取同花顺财务指标（单报告期五类指标）
+  /// 获取财务指标（单报告期五类能力）
   /// report 格式 'YYYY-[1-4]'（1=一季报/2=中报/3=三季报/4=年报）。
+  ///
+  /// 源顺序：东财 F10（keyless）优先，同花顺（BYOK）作为并列兜底。
   Future<List<FinancialIndicatorGroup>> getFinancialIndicators(
     String code,
     String report,
-  ) async {
-    if (_thinksApi == null) {
-      throw ApiException('未配置同花顺 API Key，请先到设置页填入');
-    }
+  ) {
+    return firstSuccess<List<FinancialIndicatorGroup>>([
+      DataSourceAttempt(
+        'em:dc.f10_indicators_$report',
+        () => _emFinancial.getIndicators(code, report),
+      ),
+      if (_thinksApi != null)
+        DataSourceAttempt(
+          'thinks:financial_indicators_$report',
+          () => _fromThinksIndicators(code, report),
+        ),
+    ]);
+  }
+
+  /// 同花顺财务指标（BYOK）。仅在配置了 Key 时被 [getFinancialIndicators] 挂进竞速列表。
+  Future<List<FinancialIndicatorGroup>> _fromThinksIndicators(String code, String report) async {
     final thsCode = StockCodeUtils.toThsCode(code);
     final res = await _thinksApi!.getIndicators(thscode: thsCode, report: report);
     if (!res['ok']) throw ApiException(res['error']?.toString() ?? '同花顺财务指标获取失败');

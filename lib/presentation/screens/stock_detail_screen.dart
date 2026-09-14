@@ -82,15 +82,10 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
     }
   }
 
-  /// 加载同花顺财务三表 + 指标（需用户配置 Key；未配置给出引导）
+  /// 加载财务三表 + 指标。东财 F10 免 Key 即可取数，同花顺为并列兜底源；
+  /// 两源任一成功即渲染，无需用户配置 Key。
   Future<void> _loadFinancials() async {
     if (!mounted) return;
-    // 未配置 Key：直接给出引导，不再发请求
-    final hasKey = ref.read(settingsProvider).thinksApiKey.isNotEmpty;
-    if (!hasKey) {
-      if (mounted) setState(() { _finLoading = false; _finError = '未配置同花顺 API Key'; });
-      return;
-    }
     if (mounted) setState(() { _finLoading = true; _finError = null; });
     try {
       final api = ref.read(marketApiProvider);
@@ -116,6 +111,8 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
 
   /// 加载集合竞价快照（与三表同生命周期；单只标的失败不影响其余）
   Future<void> _loadAuction() async {
+    // 集合竞价仅同花顺提供（暂无 keyless 等价源），未配置 Key 时直接跳过，不报错
+    if (ref.read(settingsProvider).thinksApiKey.isEmpty) return;
     try {
       final api = ref.read(marketApiProvider);
       final data = await api.getAuctionSnapshot(widget.stockCode, stage: _auctionStage);
@@ -315,8 +312,8 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
   // ──────────── 集合竞价（同花顺 BYOK）────────────
 
   Widget _buildAuctionCard() {
-    // 未配置 Key 时由「财务三表」卡片统一提示，避免重复
-    if (_finError != null && _finError!.contains('未配置')) {
+    // 未配置 Key 时该卡无数据可显示，直接隐藏（财务卡已能独立取到东财数据，不再代表整体状态）
+    if (ref.read(settingsProvider).thinksApiKey.isEmpty) {
       return const SizedBox.shrink();
     }
     return _card(
@@ -452,11 +449,11 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
     }
   }
 
-  // ──────────── 财务三表（同花顺 BYOK）────────────
+  // ──────────── 财务三表（东财 F10 免 Key / 同花顺 BYOK）────────────
 
   Widget _buildFinancialCard() {
     return _card(
-      '财务三表（同花顺）',
+      '财务三表',
       Icons.account_balance,
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
