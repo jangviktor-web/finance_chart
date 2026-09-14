@@ -4,6 +4,7 @@ import '../models/stock_info_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
 import '../../core/utils/rate_limiter.dart';
+import 'em_http.dart';
 
 /// 个股深度数据 API — 东方财富（带降级）
 class StockInfoApi {
@@ -22,7 +23,6 @@ class StockInfoApi {
   /// 股东人数变化 — 多报表名降级
   Future<List<ShareholderData>> getShareholders(String code, {int limit = 10}) async {
     final secCode = code.replaceAll(RegExp(r'^(sh|sz)'), '');
-    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
 
     // 尝试多个可能的报表名
     final reportNames = [
@@ -45,7 +45,7 @@ class StockInfoApi {
           'client': 'WEB',
           'filter': '(SECURITY_CODE=\'$secCode\')',
         };
-        final response = await _dio.get(ApiEndpoints.shareholders, queryParameters: params);
+        final response = await getEmWithMirror(_dio, ApiEndpoints.shareholders, params: params);
         final data = response.data is String ? json.decode(response.data) : response.data;
 
         if (data['result'] == null) continue;
@@ -80,7 +80,7 @@ class StockInfoApi {
         'fields': 'f57,f58,f116,f117,f162,f163,f164,f167,f173,f183,f186,f187',
         'invt': '2',
       };
-      final response = await _dio.get(url, queryParameters: params);
+      final response = await getEmWithMirror(_dio, url, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
       final d = data['data'];
       if (d != null && d is Map) {
@@ -122,7 +122,6 @@ class StockInfoApi {
   /// 大宗交易 — 多报表名降级
   Future<List<BlockTrade>> getBlockTrades(String code, {int limit = 20}) async {
     final secCode = code.replaceAll(RegExp(r'^(sh|sz)'), '');
-    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
 
     final reportNames = [
       'RPT_BLOCKTRADE_DETAILNEW',
@@ -144,7 +143,7 @@ class StockInfoApi {
           'client': 'WEB',
           'filter': '(SECURITY_CODE=\'$secCode\')',
         };
-        final response = await _dio.get(ApiEndpoints.blockTrades, queryParameters: params);
+        final response = await getEmWithMirror(_dio, ApiEndpoints.blockTrades, params: params);
         final data = response.data is String ? json.decode(response.data) : response.data;
 
         if (data['result'] == null) continue;
@@ -172,7 +171,6 @@ class StockInfoApi {
   /// 限售解禁 — RPT_LIFT_STAGE 已验证可用
   Future<List<RestrictedShare>> getRestrictedShares(String code, {int limit = 10}) async {
     final secCode = code.replaceAll(RegExp(r'^(sh|sz)'), '');
-    await RateLimiter.instance.wait('datacenter-web.eastmoney.com');
     final params = {
       'sortColumns': 'FREE_DATE',
       'sortTypes': '-1',
@@ -186,7 +184,7 @@ class StockInfoApi {
     };
 
     try {
-      final response = await _dio.get(ApiEndpoints.restrictedShares, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.restrictedShares, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];

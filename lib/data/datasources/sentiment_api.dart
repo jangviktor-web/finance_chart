@@ -2,15 +2,18 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../models/sentiment_data.dart';
 import 'thinks_api.dart';
+import 'em_http.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/utils/app_logger.dart';
 import '../../core/utils/rate_limiter.dart';
 
 /// 市场情绪 API — 多数据源降级
 ///
-/// 东财为默认源；当设备 IP 被限流（返回空/异常）且用户配置了同花顺 Key 时，
-/// 涨停/跌停池、龙虎榜三个端点自动回退到同花顺 special-data 容灾源。
-/// 北向/融资融券/板块资金东财无同花顺等价端点，保持东财单源。
+/// 默认源为东财，所有东财调用统一经 [getEmWithMirror]：主域失败/业务空时
+/// 自动换镜像域重试（datacenter-web↔datacenter 全量互备；push2↔push2delay
+/// 仅实时类路径）。push3 已证实是死域名，不再使用。
+/// 龙虎榜链路为 东财 → 腾讯 keyless → 同花顺(BYOK)：东财宕机/限流时腾讯免费榜
+/// 顶上，仍不行且用户配了 Key 再回退同花顺。其余端点东财无等价第二源，保持东财单源。
 class SentimentApi {
   final Dio _dio;
   final ThinksApi? _thinksApi;
@@ -29,37 +32,12 @@ class SentimentApi {
             ? ThinksApi(apiKey: thinksApiKey)
             : null;
 
-  /// 带重试 + 域名降级的 push 请求
-  /// 主域名 push2 → 备用域名 push3，每个域名最多重试 maxRetries 次
-  Future<Response> _push2Retry(String url, Map<String, dynamic> params, {int maxRetries = 2}) async {
-    // 全局频率控制
-    await RateLimiter.instance.waitByUrl(url);
-
-    // 构建域名列表：push2 → push3
-    final fallbackUrl = url.replaceFirst('push2.eastmoney.com', 'push3.eastmoney.com');
-    final hosts = [url, if (fallbackUrl != url) fallbackUrl];
-
-    for (final hostUrl in hosts) {
-      for (int i = 0; i < maxRetries; i++) {
-        try {
-          final response = await _dio.get(hostUrl, queryParameters: params);
-          RateLimiter.instance.recordSuccess(_extractDomain(hostUrl));
-          return response;
-        } catch (e) {
-          final domain = _extractDomain(hostUrl);
-          RateLimiter.instance.recordFailure(domain);
-          AppLog.instance.warn('SentimentApi', '$domain 请求第${i + 1}次失败: $e');
-          if (i < maxRetries - 1) {
-            await Future.delayed(Duration(seconds: 1 << i));
-          }
-        }
-      }
-    }
-    throw Exception('push2/push3 所有请求均失败');
-  }
-
-  String _extractDomain(String url) {
-    try { return Uri.parse(url).host; } catch (_) { return 'unknown'; }
+  /// push2 实时类请求（clist 等）。push2 → push2delay 互为镜像（仅实时类路径），
+  /// 直接走 [getEmWithMirror] 自动换域重试。push3 已证实是死域名（SSL 握手失败），不再使用。
+  Future<Response> _push2Retry(String url, Map<String, dynamic> params) async {
+    // ponytail: getEmWithMirror 已内含限流等待 + 主域失败换 push2delay 重试 + 业务空判定，
+    // 这里不再手写域名列表与退避，与 macro_api / fund_flow_api 保持一致。
+    return getEmWithMirror(_dio, url, params: params);
   }
 
   /// 涨停池 — 默认东财；东财空/失败且配置了同花顺 Key 时回退 THS
@@ -190,16 +168,25 @@ class SentimentApi {
         .toList();
   }
 
-  /// 龙虎榜 — 默认东财；东财空/失败且配置了同花顺 Key 时回退 THS
+  /// 龙虎榜 — 链路：东财(镜像域) → 腾讯 keyless → 同花顺(BYOK)
   Future<List<DragonTigerItem>> getDragonTiger({int days = 5, int limit = 30}) async {
-    List<DragonTigerItem> em = [];
+    // 1) 东财（主源，走镜像域自动换域）
     try {
-      em = await _fetchDragonTigerEm(days: days, limit: limit);
+      final em = await _fetchDragonTigerEm(days: days, limit: limit);
+      if (em.isNotEmpty) return em;
     } catch (e) {
       AppLog.instance.error('SentimentApi', 'getDragonTiger 东财失败: $e');
     }
-    if (em.isNotEmpty) return em;
 
+    // 2) 腾讯 keyless 龙虎榜（独立链路，无 Key 也能用）
+    try {
+      final qq = await _fetchDragonTigerTencent(limit: limit);
+      if (qq.isNotEmpty) return qq;
+    } catch (e) {
+      AppLog.instance.error('SentimentApi', 'getDragonTiger 腾讯失败: $e');
+    }
+
+    // 3) 同花顺（仅当用户配置了 BYOK Key）
     if (_thinksApi != null) {
       try {
         final ths = await _thinksApi.getDragonTigerThs();
@@ -208,7 +195,7 @@ class SentimentApi {
         AppLog.instance.error('SentimentApi', 'getDragonTiger 同花顺容灾失败: $e');
       }
     }
-    return em;
+    return [];
   }
 
   /// 龙虎榜（东财源）
@@ -227,8 +214,7 @@ class SentimentApi {
       'client': 'WEB',
     };
 
-    await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
-    final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
+    final response = await getEmWithMirror(_dio, ApiEndpoints.dragonTiger, params: params);
     final data = response.data is String ? json.decode(response.data) : response.data;
 
     if (data['result'] == null) return [];
@@ -252,6 +238,48 @@ class SentimentApi {
     }).toList();
   }
 
+  /// 龙虎榜（腾讯 keyless 源）— 独立链路，东财宕机/限流时的第二供应商。
+  /// 响应 data.all 为定长 10 元组数组（非 keyed），列序经实测锁定：
+  /// [0]代码(带市场前缀) [1]名称 [2]类型 [3]净买入额(元) [4]涨跌幅%
+  /// [5]买入额(元) [6]卖出额(元) [7]换手率% [8]标识 [9]明细。
+  Future<List<DragonTigerItem>> _fetchDragonTigerTencent({int limit = 30}) async {
+    await RateLimiter.instance.waitByUrl(ApiEndpoints.tencentLhbDaily);
+    final response = await _dio.get(
+      ApiEndpoints.tencentLhbDaily,
+      queryParameters: {
+        'param': json.encode({'queryType': '0', 'lhbDate': '', 'startTime': '', 'endTime': ''}),
+      },
+      options: Options(headers: {'Referer': 'https://gu.qq.com/'}),
+    );
+    final data = response.data is String ? json.decode(response.data) : response.data;
+    if (data['code'] != 0) return [];
+    final body = data['data'];
+    if (body == null) return [];
+    final dateStr = body['date']?.toString() ?? '';
+    final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+    final all = body['all'] as List? ?? [];
+    final items = <DragonTigerItem>[];
+    for (final row in all) {
+      if (row is! List || row.length < 8) continue;
+      final code = (row[0] ?? '').toString();
+      if (code.isEmpty) continue;
+      items.add(DragonTigerItem(
+        code: code, // 已是 sh/sz 前缀格式，直接使用
+        name: row[1]?.toString() ?? '',
+        changePercent: _toDouble(row[4]),
+        closePrice: 0, // ponytail: 腾讯免费榜不含收盘价，留 0
+        turnoverRate: _toDouble(row[7]),
+        netBuy: _toDouble(row[3]) / 10000, // 元→万元
+        totalBuy: _toDouble(row[5]) / 10000,
+        totalSell: _toDouble(row[6]) / 10000,
+        reason: '', // ponytail: 免费榜不含上榜原因文案
+        date: date,
+      ));
+      if (items.length >= limit) break;
+    }
+    return items;
+  }
+
   /// 北向资金实时（多参数降级）
   Future<List<NorthboundData>> getNorthboundRealtime() async {
     final paramSets = [
@@ -268,8 +296,7 @@ class SentimentApi {
 
     for (final params in paramSets) {
       try {
-        await RateLimiter.instance.waitByUrl(ApiEndpoints.northbound);
-        final response = await _dio.get(ApiEndpoints.northbound, queryParameters: params);
+        final response = await getEmWithMirror(_dio, ApiEndpoints.northbound, params: params);
         final data = response.data is String ? json.decode(response.data) : response.data;
 
         final List<NorthboundData> result = [];
@@ -323,8 +350,7 @@ class SentimentApi {
     };
 
     try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.northboundHistory);
-      final response = await _dio.get(ApiEndpoints.northboundHistory, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.northboundHistory, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];
@@ -381,8 +407,7 @@ class SentimentApi {
     };
 
     try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.margin);
-      final response = await _dio.get(ApiEndpoints.margin, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.margin, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];
@@ -510,8 +535,7 @@ class SentimentApi {
     };
 
     try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.northboundHistory);
-      final response = await _dio.get(ApiEndpoints.northboundHistory, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.northboundHistory, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];
@@ -547,8 +571,7 @@ class SentimentApi {
     };
 
     try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.northboundHistory);
-      final response = await _dio.get(ApiEndpoints.northboundHistory, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.northboundHistory, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];
@@ -590,8 +613,7 @@ class SentimentApi {
     };
 
     try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
-      final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.dragonTiger, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];
@@ -635,8 +657,7 @@ class SentimentApi {
     };
 
     try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
-      final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.dragonTiger, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];
@@ -676,8 +697,7 @@ class SentimentApi {
     };
 
     try {
-      await RateLimiter.instance.waitByUrl(ApiEndpoints.dragonTiger);
-      final response = await _dio.get(ApiEndpoints.dragonTiger, queryParameters: params);
+      final response = await getEmWithMirror(_dio, ApiEndpoints.dragonTiger, params: params);
       final data = response.data is String ? json.decode(response.data) : response.data;
 
       if (data['result'] == null) return [];
