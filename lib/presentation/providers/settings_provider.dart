@@ -48,6 +48,12 @@ class AppSettings {
     this.enableHotspot = true,
     this.enablePeerCompare = true,
     this.enableDeepAnalysis = true,
+    // 共享演示 Key（2026-08-30 用户明确选择保留，非个人凭据、无需轮换）。
+    // 风险已知并接受，属有意折中（换取开箱即用）：
+    //   ① 本仓库为公开 GitHub 仓库，该 Key 随源码可见、可被反编译提取；
+    //   ② 所有用户共用同一 Key，东财侧限流/超额时全体一起失效；
+    //   ③ 与下方 thinksApiKey 的「纯 BYOK」策略不一致。
+    // 回到纯 BYOK 只需置 ''，设置页会引导用户填自己的 Key。
     this.emApiKey = 'em_IjcEMTprwBcjOdyC7dqv1ZNJ1HlV3mIH',
     // 纯 BYOK：不内置任何同花顺 Key，未配置时 UI 引导用户到设置页填写。
     // 切勿在此硬编码凭据 —— 会随包分发、可被反编译提取。

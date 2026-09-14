@@ -6,6 +6,9 @@ import '../../data/datasources/stock_info_api.dart';
 import '../../data/models/stock_info_data.dart';
 import '../../data/models/financial_data.dart';
 import '../../data/models/auction_data.dart';
+import '../../data/models/stock_score.dart';
+import '../../domain/services/scoring_engine.dart';
+import '../../presentation/widgets/chart/radar_chart_painter.dart';
 import '../../presentation/providers/market_provider.dart';
 import '../../presentation/providers/settings_provider.dart';
 import '../../presentation/screens/settings_screen.dart';
@@ -135,6 +138,9 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ponytail: 5 维雷达直接复用 compare_screen 的 ScoringEngine + RadarChartPainter，
+    // 单股传单元素列表即可。klineProvider 命中 CacheManager 时不会产生网络请求。
+    final klineState = ref.watch(klineProvider(widget.stockCode));
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -151,6 +157,10 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      if (klineState.klines.isNotEmpty) ...[
+                        _buildScoreRadarCard(klineState),
+                        const SizedBox(height: 12),
+                      ],
                       _buildValuationCard(),
                       const SizedBox(height: 12),
                       _buildShareholderCard(),
@@ -686,6 +696,49 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
             ],
           ),
       ],
+    );
+  }
+
+  /// 单股 5 维评分雷达 —— 复用 StockScore / ScoringEngine / RadarChartPainter
+  Widget _buildScoreRadarCard(MarketState state) {
+    final score = ScoringEngine.calculate(
+      code: widget.stockCode,
+      name: widget.stockName,
+      klines: state.klines,
+      indicators: state.indicators,
+    );
+
+    return _card(
+      '多维评分雷达',
+      Icons.radar,
+      Column(
+        children: [
+          SizedBox(
+            height: 200,
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: RadarChartPainter(scores: [score], colors: [AppColors.primary]),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 14,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
+            children: List.generate(StockScore.dimensionLabels.length, (i) {
+              return Text(
+                '${StockScore.dimensionLabels[i]} ${score.values[i].toStringAsFixed(0)}',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+              );
+            }),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '综合评分 ${score.total.toStringAsFixed(1)}',
+            style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
     );
   }
 
