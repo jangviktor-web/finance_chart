@@ -68,6 +68,27 @@ void main() {
       expect(StockCodeUtils.toThsCode('000001'), '000001.SZ');
       expect(StockCodeUtils.toThsCode('830799'), '830799.BJ');
     });
+
+    // 回归：原实现把 920xxx 当沪市（→ 920799.SH 查财报静默返回空）、把 5xxxxx 当深市。
+    test('toThsCode 北交所 920 新号段不得被 9 吞进沪市', () {
+      expect(StockCodeUtils.toThsCode('920799'), '920799.BJ');
+      expect(StockCodeUtils.toThsCode('sz920799'), '920799.BJ');
+      expect(StockCodeUtils.toThsCode('430047'), '430047.BJ');
+    });
+
+    test('toThsCode 沪基金 5xxxxx 归沪市', () {
+      expect(StockCodeUtils.toThsCode('510300'), '510300.SH');
+      expect(StockCodeUtils.toThsCode('159915'), '159915.SZ');
+    });
+
+    test('toThsCode 沪B股 900xxx 仍归沪市（不被 920 分支误伤）', () {
+      expect(StockCodeUtils.toThsCode('900901'), '900901.SH');
+    });
+
+    test('toThsCode 科创/创业板输出不变', () {
+      expect(StockCodeUtils.toThsCode('688981'), '688981.SH');
+      expect(StockCodeUtils.toThsCode('300750'), '300750.SZ');
+    });
   });
   group('StockCodeUtils.isAShare / isFundOrEtf', () {
     test('isAShare: A 股(true) / 港美股板块(false)', () {

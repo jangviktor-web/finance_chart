@@ -70,12 +70,23 @@ class StockCodeUtils {
     return false;
   }
 
-  /// 同花顺 thscode 格式: 600519.SH / 000001.SZ / 8xxxxx.BJ
-  /// 用于同花顺金融数据 API（BYOK）的兜底行情请求
+  /// 同花顺 thscode 格式: 600519.SH / 000001.SZ / 920799.BJ
+  /// 用于同花顺金融数据 API（BYOK）的兜底行情请求，以及东财 F10 的 `SECUCODE`（两者同形）
+  ///
+  /// ponytail: 原实现按「6/9 → 沪，4/8 → 京，其余 → 深」判，漏了两处纯地址错：
+  /// ① `920xxx` 是北交所新号段，被 `9` 一并吞进沪市 —— 实测 `920799.SH` 查财报返回
+  ///    「返回数据为空」而 `920799.BJ` 正常，表现为北交所股票财务三表**静默空白**；
+  /// ② `5xxxxx` 沪基金被落到深市。
   static String toThsCode(String code) {
     final pure = pureCode(format(code));
-    if (pure.startsWith('6') || pure.startsWith('9')) return '$pure.SH';
-    if (pure.startsWith('4') || pure.startsWith('8')) return '$pure.BJ';
+    // 北交所：920xxx（新号段）+ 4xxxxx / 8xxxxx（老号段）—— 必须排在 '9' 之前
+    if (pure.startsWith('920') || pure.startsWith('4') || pure.startsWith('8')) {
+      return '$pure.BJ';
+    }
+    // 沪市：沪主板/科创 6xxxxx、沪基金 5xxxxx、沪B股 900xxx
+    if (pure.startsWith('6') || pure.startsWith('5') || pure.startsWith('9')) {
+      return '$pure.SH';
+    }
     return '$pure.SZ';
   }
 }
