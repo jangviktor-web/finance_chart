@@ -247,7 +247,9 @@ class MarketScanner {
     String label,
   ) async {
     // 主域名 + 备用域名
-    final hosts = ['push2.eastmoney.com', 'push3.eastmoney.com'];
+    // 🔴 原备用域 push3.eastmoney.com 域名不通（SSL 握手失败），降级从未生效。
+    // 换成实测可用的 push2 镜像域；clist 属实时类路径，镜像有效。
+    final hosts = ['push2.eastmoney.com', 'push2delay.eastmoney.com'];
 
     for (final host in hosts) {
       bool success = false;

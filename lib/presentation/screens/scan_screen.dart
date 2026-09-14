@@ -93,9 +93,11 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       },
     ));
     // 用两个域名做降级检测
+    // 🔴 原第二个域名 push3.eastmoney.com 不通（SSL 握手失败），该探测永远失败。
+    // 换成实测可用的 push2 镜像域（clist 属实时类路径，镜像有效）。
     final urls = [
       'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=m:1+t:2&fields=f12',
-      'https://push3.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=m:1+t:2&fields=f12',
+      'https://push2delay.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=m:1+t:2&fields=f12',
     ];
     for (final url in urls) {
       try {
