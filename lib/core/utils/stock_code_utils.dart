@@ -44,6 +44,32 @@ class StockCodeUtils {
     return '$market.${pureCode(formatted)}';
   }
 
+  /// 是否 A 股市场（沪深主板/科创/创业板 + 北交所）。港美股 secid、板块、非 6 位数字代码一律为 false。
+  ///
+  /// 用途：判断某标的能否走东财 F10 财务接口（F10 只覆盖 A 股）。
+  static bool isAShare(String code) {
+    final f = format(code);
+    if (f.contains('.')) {
+      // 东财 secid：`1.` = 沪A、`0.` = 深A、`116.` = 港股、`105/106/107.` = 美股、`90.` = 板块
+      final prefix = f.split('.').first;
+      return prefix == '1' || prefix == '0';
+    }
+    return RegExp(r'^\d{6}$').hasMatch(pureCode(f));
+  }
+
+  /// 是否境内 ETF / 基金：沪 `5xxxxx`；深 `15/16/17/18xxxx`。
+  ///
+  /// ⚠️ 这类代码**是** A 股代码格式，但东财 F10 不提供其财务报表（实测 510300.SH /
+  /// 159915.SZ 均返回「返回数据为空」），故单列出来。
+  static bool isFundOrEtf(String code) {
+    final f = format(code);
+    if (f.contains('.')) return false;
+    final pure = pureCode(f);
+    if (f.startsWith('sh')) return pure.startsWith('5');
+    if (f.startsWith('sz')) return RegExp(r'^1[5-8]').hasMatch(pure);
+    return false;
+  }
+
   /// 同花顺 thscode 格式: 600519.SH / 000001.SZ / 8xxxxx.BJ
   /// 用于同花顺金融数据 API（BYOK）的兜底行情请求
   static String toThsCode(String code) {

@@ -69,4 +69,40 @@ void main() {
       expect(StockCodeUtils.toThsCode('830799'), '830799.BJ');
     });
   });
+  group('StockCodeUtils.isAShare / isFundOrEtf', () {
+    test('isAShare: A 股(true) / 港美股板块(false)', () {
+      expect(StockCodeUtils.isAShare('sh600519'), isTrue);
+      expect(StockCodeUtils.isAShare('600519'), isTrue);
+      expect(StockCodeUtils.isAShare('300750'), isTrue);
+      expect(StockCodeUtils.isAShare('920799'), isTrue);
+      expect(StockCodeUtils.isAShare('sz000001'), isTrue);
+      expect(StockCodeUtils.isAShare('116.00700'), isFalse);
+      expect(StockCodeUtils.isAShare('105.AAPL'), isFalse);
+      expect(StockCodeUtils.isAShare('90.BK0475'), isFalse);
+      expect(StockCodeUtils.isAShare('AAPL'), isFalse);
+      expect(StockCodeUtils.isAShare('00700'), isFalse);
+    });
+
+    test('isFundOrEtf: 沪5/深15-18(true) / 其余(false)', () {
+      expect(StockCodeUtils.isFundOrEtf('sh510300'), isTrue);
+      expect(StockCodeUtils.isFundOrEtf('510300'), isTrue);
+      expect(StockCodeUtils.isFundOrEtf('159915'), isTrue);
+      expect(StockCodeUtils.isFundOrEtf('sz159915'), isTrue);
+      expect(StockCodeUtils.isFundOrEtf('184801'), isTrue);
+      expect(StockCodeUtils.isFundOrEtf('sh600519'), isFalse);
+      expect(StockCodeUtils.isFundOrEtf('sz000001'), isFalse);
+      expect(StockCodeUtils.isFundOrEtf('920799'), isFalse);
+      expect(StockCodeUtils.isFundOrEtf('105.AAPL'), isFalse);
+    });
+
+    test('组合：_finUnsupportedMarket 语义', () {
+      // 直接复用两个判定模拟 _finUnsupportedMarket 的真值（私有 getter 在 widget 内，这里等价复算）
+      bool unsupported(String code) =>
+          !StockCodeUtils.isAShare(code) || StockCodeUtils.isFundOrEtf(code);
+      expect(unsupported('00700'), isTrue); // 港股
+      expect(unsupported('sh600519'), isFalse); // A 股
+      expect(unsupported('sh510300'), isTrue); // 沪 ETF
+      expect(unsupported('920799'), isFalse); // 北交所（支持）
+    });
+  });
 }

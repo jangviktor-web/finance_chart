@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
+import '../../core/utils/stock_code_utils.dart';
 import '../../data/datasources/stock_info_api.dart';
 import '../../data/models/stock_info_data.dart';
 import '../../data/models/financial_data.dart';
@@ -542,7 +543,34 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
     );
   }
 
+  /// 该标的的市场/品种是否不在东财 F10 覆盖范围内（港股/美股/板块 + 境内 ETF/基金）。
+  /// F10 只覆盖 A 股（含北交所）；这类标的三表必然为空，需要给出解释而非裸「暂无数据」。
+  bool get _finUnsupportedMarket {
+    final code = widget.stockCode;
+    if (code.trim().isEmpty) return false;
+    return !StockCodeUtils.isAShare(code) || StockCodeUtils.isFundOrEtf(code);
+  }
+
+  /// 三表与指标是否全都拿不到数据（用于区分「市场不支持」与「暂时没取到」）。
+  bool get _finAllEmpty =>
+      (_income?.isEmpty ?? true) &&
+      (_balance?.isEmpty ?? true) &&
+      (_cashflow?.isEmpty ?? true) &&
+      (_indicators?.isEmpty ?? true);
+
   Widget _buildFinContent() {
+    // 市场不支持优先于「暂无数据」：三表与指标都空且不在加载/报错态时，说明清楚原因。
+    // ponytail: 条件带上 _finAllEmpty 而非只看市场 —— 将来若某源覆盖了 ETF，有数据就照常
+    // 渲染，这个提示自动失效，不会挡路。
+    if (_finUnsupportedMarket && _finAllEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          '该市场暂不支持财务三表',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+      );
+    }
     switch (_finType) {
       case 'income':
         return _buildStatementTable(_income, kIncomeLabels);
