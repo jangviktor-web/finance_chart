@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -12,6 +11,7 @@ import '../models/auction_data.dart';
 import '../models/fund_data.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../core/errors/api_exception.dart';
+import '../../core/utils/data_source_router.dart';
 import '../../core/utils/stock_code_utils.dart';
 import '../../core/utils/rate_limiter.dart';
 import 'local/cache_manager.dart';
@@ -421,17 +421,17 @@ class MarketApi {
       } else {
         // auto 模式（S2）：腾讯+新浪 竞速（低风控源优先），全部失败再兜底东财
         // 注：百度 K 线接口当前不可用（返回空），故不加入竞速池
-        final sources = <_Source<List<KlineData>>>[
-          _Source('tencent', _getKlineFromTencent(code, period, count)),
+        final sources = <DataSourceAttempt<List<KlineData>>>[
+          DataSourceAttempt('tencent', _getKlineFromTencent(code, period, count)),
         ];
 
         // 新浪只支持日/周/月线
         if (['day', 'week', 'month'].contains(period)) {
-          sources.add(_Source('sina', _getKlineFromSina(code, period, count)));
+          sources.add(DataSourceAttempt('sina', _getKlineFromSina(code, period, count)));
         }
 
         try {
-          return await _race(sources);
+          return await firstSuccess(sources);
         } catch (_) {
           // 东财风控最高，仅在低风控源全部失败时兜底
           try {
@@ -738,41 +738,6 @@ class MarketApi {
   // ──────────── 并行竞速 ────────────
 
   /// 并行发起所有请求，返回第一个成功的结果；全部失败则抛异常
-  Future<T> _race<T>(List<_Source<T>> sources) async {
-    final errors = <String>[];
-
-    // 包装每个 Future，捕获异常返回 null
-    final futures = sources.map((s) async {
-      try {
-        return await s.future;
-      } catch (e) {
-        errors.add('${s.name}: $e');
-        return null;
-      }
-    }).toList();
-
-    // 等待第一个成功的
-    final completer = Completer<T>();
-    var remaining = futures.length;
-
-    for (final future in futures) {
-      future.then((result) {
-        if (result != null && !completer.isCompleted) {
-          completer.complete(result);
-        }
-        remaining--;
-        if (remaining == 0 && !completer.isCompleted) {
-          completer.completeError(NetworkException(
-            '所有数据源均失败: ${errors.join('; ')}',
-            source: 'MarketApi._race',
-          ));
-        }
-      });
-    }
-
-    return completer.future;
-  }
-
   DateTime _parseTime(String timeStr) {
     if (timeStr.contains('-')) return DateTime.parse(timeStr);
     if (timeStr.length == 12) {
@@ -851,9 +816,3 @@ class RetryInterceptor extends Interceptor {
   }
 }
 
-/// 数据源包装：名称 + 异步 Future
-class _Source<T> {
-  final String name;
-  final Future<T> future;
-  _Source(this.name, this.future);
-}
