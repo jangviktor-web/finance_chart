@@ -12,3 +12,10 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# 密钥库备份包（含 .jks 的 zip）。仓库是 PUBLIC，提交即等于公开私钥。
+# 2026-09-15 实测：android/app/ 下就躺着一个 "finance_chart key.zip"，
+# 而上面的 **/*.jks 只匹配后缀，挡不住 .zip —— 这条就是补这个洞。
+*.zip
+**/*key*.zip
+*.jks.bak
