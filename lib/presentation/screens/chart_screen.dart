@@ -11,6 +11,7 @@ import '../widgets/chart/kline_chart_widget.dart';
 import '../widgets/common/error_widget.dart';
 import 'analysis_screen.dart';
 import 'valuation_screen.dart';
+import 'stock_detail_screen.dart';
 import '../../app/theme.dart';
 
 class ChartScreen extends ConsumerStatefulWidget {
@@ -376,6 +377,19 @@ class _ChartScreenState extends ConsumerState<ChartScreen> {
               context,
               MaterialPageRoute(
                 builder: (_) => ValuationScreen(
+                  stockCode: widget.stockCode,
+                  stockName: state.quote.name.isNotEmpty ? state.quote.name : widget.stockCode,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.description_outlined),
+            tooltip: '详情',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StockDetailScreen(
                   stockCode: widget.stockCode,
                   stockName: state.quote.name.isNotEmpty ? state.quote.name : widget.stockCode,
                 ),
