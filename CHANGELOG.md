@@ -76,6 +76,11 @@
 ### 质量
 - 单元测试 40 → 67 全绿；`flutter analyze` 0 error
 
+### 打包
+- GitHub Actions 改为产出 **4 个 APK**：1 个通用包（`app-release.apk`）+ 3 个分架构包（`app-arm64-v8a` / `app-armeabi-v7a` / `app-x86_64`）。分架构包体积约为通用包的 1/3
+- 修复 CI 每次必失败的老问题：`android-actions/setup-android` 会尝试安装 Google 已从 SDK 仓库下线的 `tools` 包（升到 `@v4` 无效，v4 默认值相同）
+- 分架构构建**只在 CI 启用**（靠 `flutter build apk --split-per-abi` 传入的 `-Psplit-per-abi` 属性开关控制），本机 `flutter build apk --release` 行为不变 —— 本机内存受限，常态化开启会触发 R8 Metaspace OOM
+
 ### 已知限制
 - 东财 F10 **不覆盖 ETF 与港美股**（实测 `510300.SH` / `159915.SZ` / `00700.HK` 均返回空），这类标的的财务卡会提示「暂不支持财务三表」
 - 集合竞价仍仅由同花顺提供，需要用户自备 Key
