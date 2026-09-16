@@ -4,6 +4,84 @@
 
 ---
 
+## v1.11.3 (2026-09-16)
+
+**新增 3 组免 Key 数据源（东财镜像域 / 东财 F10 财务报表 / 腾讯龙虎榜）· 多源降级升级为端点级熔断 · 个股详情页打通（财务三表/指标 · 集合竞价 · 股东 · 大宗 · 限售 · 5 维雷达）**
+
+### 新增数据源
+
+**东方财富镜像域 — 同源不同机冗余**
+- `datacenter.eastmoney.com`：`datacenter-web` 的镜像主机，**所有 reportName 响应体字节级一致**，且享受独立的限流配额桶
+- `push2delay.eastmoney.com`：`push2` 的镜像主机，**仅实时类路径可用**（clist / ulist.np / kamt.rtmin / trends2）
+- 覆盖模块：宏观、资金流、情绪面、个股深度、个股详情
+- 新增镜像请求助手 `em_http.dart`：主域失败**自动换镜像域重试**；除异常/超时/非 2xx 外，还把「HTTP 200 但业务空」判为失败（东财限流风控的典型形态是 `{"success":false,"message":"服务器繁忙"}`，只判异常会漏掉最常见的一类失效）
+
+**东方财富 F10 财务报表 — 免 Key**
+- 端点 `datacenter-web.eastmoney.com/api/data/v1/get`，4 张报表：利润表 / 资产负债表 / 现金流量表 / 主要指标
+- **无需配置任何 API Key** 即可查看 A 股财务数据；已配置同花顺 Key 的用户保留同花顺作为并列数据源
+- 适配层做三件事：东财大写字段 → 内部统一 key 的翻译（26 个报表字段 + 14 个指标）、报告期由 `REPORT_DATE`/`REPORT_TYPE` 合成、指标按成长/盈利/偿债/运营/现金流五类分桶
+
+**腾讯龙虎榜 — 免 Key**
+- 龙虎榜每日榜单 + 个股龙虎榜详情两个端点，作为东财龙虎榜的并列第二源
+
+### 模块更新
+
+**数据层 — 多源自动降级升级为端点级熔断**
+- 从 `market_api` 抽出共享工具 `firstSuccess`：并发竞速多个数据源，返回第一个成功结果
+- 新增端点级健康追踪 `SourceHealth`，命名粒度到 `vendor:endpoint`：某端点连续失败 3 次进入 5 分钟冷却，冷却到期自愈；**单一端点故障不再连累同厂商其它端点**（此前一个端点挂掉会拖累同厂商全部请求）
+- 冷却中的端点**直接跳过**，不浪费它的整段超时
+- 标的级「无数据」不再计入端点熔断 —— 避免连看几只无财务覆盖的标的就把东财财务端点整体熔断
+
+**行情与 K 线**
+- **港美股代码修复**：此前非沪深代码会被猜成 `szXXXXXX`（如 `00700` → `sz00700`、`AAPL` → `szaapl`），导致图表**静默空白**；现直接使用上游返回的 secid（港股 `116.00700`、美股 `105.AAPL`）
+- 搜索结果的交易所归属改为读上游 `QuoteID`，不再二次猜测
+
+**情绪面**
+- 修正降级链路中指向 **死域名 `push3.eastmoney.com`** 的引用（该域名不存在，HTTPS 握手即失败，属"装饰性降级" —— 看起来有备份，实际永远不可用）
+- 北向资金 / 融资融券 / 板块资金 / 北向历史接入东财镜像域
+- 龙虎榜新增腾讯 keyless 第二源
+
+**宏观 / 资金流**
+- 修正 LPR 的失效报表名
+- CPI / PPI / GDP / PMI / M2 / LPR 与资金流模块接入东财镜像域
+
+**个股详情页（本轮首次真正可达）**
+- 个股页右上角新增「详情」入口 —— 此前 `StockDetailScreen` 无任何跳转来源，财务三表 / 财务指标 / 集合竞价 / 股东 / 大宗交易 / 限售解禁 / 5 维评分雷达整簇功能**从未进入过安装包**，本版起才真正可见
+- 新增 **5 维评分雷达**卡片（估值 / 动量 / 波动 / 趋势 / 量能），复用对比页的评分引擎与自绘雷达图
+- 财务三表接入东财 F10 免 Key 源：**未配置同花顺 Key 的用户现在也能看到 A 股财务数据**
+- 无 F10 覆盖的市场（港股 / 美股 / ETF）**明确提示「暂不支持财务三表」**，不再显示无解释的空白
+
+**代码工具**
+- `toThsCode` 交易所判定修正：北交所代码被送到 `.SH`、沪市基金被送到 `.SZ`，导致北交所财务数据静默空白
+
+### 新增文件
+- `lib/data/datasources/em_http.dart` — 东财镜像请求助手（主域失败换镜像域 + 业务空返回判定）
+- `lib/data/datasources/em_financial_api.dart` — 东财 F10 财务适配器（字段翻译 + 报告期合成 + 指标五类分桶）
+- `lib/core/utils/data_source_router.dart` — 多源竞速 + 端点级熔断/冷却（从 `market_api` 抽出）
+- `test/em_financial_api_test.dart` — 财务适配器离线单测（15 例）
+- `test/em_http_test.dart` / `test/data_source_router_test.dart` / `test/stock_code_utils_test.dart`
+
+### 修改文件
+- `lib/data/datasources/market_api.dart` — 财务方法改走多源竞速；港美股 secid；镜像域
+- `lib/data/datasources/macro_api.dart` — 接入镜像域 + LPR 报表名修正
+- `lib/data/datasources/fund_flow_api.dart` — 接入镜像域
+- `lib/data/datasources/sentiment_api.dart` — 接入镜像域 + 铲除死域名 push3
+- `lib/data/datasources/search_api.dart` — 交易所归属改用上游 `QuoteID`
+- `lib/core/utils/stock_code_utils.dart` — 港美股/板块 secid 直通；`toThsCode` 交易所修正
+- `lib/core/constants/api_endpoints.dart` — 新增镜像主机、F10 报表端点
+- `lib/presentation/screens/stock_detail_screen.dart` — 拆掉无 Key 门禁；5 维雷达；市场覆盖提示
+- `lib/presentation/screens/chart_screen.dart` — AppBar 新增「详情」入口
+- `lib/presentation/providers/settings_provider.dart` — 共享 Key 风险显式标注
+
+### 质量
+- 单元测试 40 → 67 全绿；`flutter analyze` 0 error
+
+### 已知限制
+- 东财 F10 **不覆盖 ETF 与港美股**（实测 `510300.SH` / `159915.SZ` / `00700.HK` 均返回空），这类标的的财务卡会提示「暂不支持财务三表」
+- 集合竞价仍仅由同花顺提供，需要用户自备 Key
+
+---
+
 ## v1.9.0 (2026-08-21)
 
 **分架构 APK 打包 · 多源自动降级备用链路 · 资讯扩充（华尔街见闻/财经日历/研报/互动易）· R8 压缩 · 指标计算 isolate · 系统级 API Key 安全存储**
