@@ -1,15 +1,18 @@
 name: Release APK
 
-# 触发：
-#   1. 推送以 v 开头的 tag（如 v1.11.3）→ 自动构建并发布 Release
-#   2. Actions 页面手动触发（workflow_dispatch）→ 只构建并上传 workflow artifact，
-#      **不发 Release**（见「Publish」步骤的 tag 守卫），便于改完 CI 先试跑验证
+# 触发（三选一命中即跑）：
+#   1. 推送以 v 开头的 tag（如 v1.11.3）→ 构建 4 个包 **并发 Release**
+#   2. 推送到 master → 构建 4 个包，**只留 workflow artifact，不发 Release**
+#      （见「Publish」步骤的 tag 守卫），便于每次提交都先验证 CI 能出包
+#   3. Actions 页面手动触发（workflow_dispatch）→ 同 2，只构建不发 Release
 #
 # 产物：1 个通用包（app-release.apk）+ 3 个分架构包
 #       （arm64-v8a / armeabi-v7a / x86_64），共 4 个 APK。
 #
 # Release 正文：body_path 指向 release_notes/<tag>.md（如 release_notes/v1.11.3.md）。
-#   ⛔ 该文件缺失会让发布步骤直接失败 —— 每次发版前必须先建好。
+#   ⛔ 该文件缺失**不会**让发布失败 —— action 内部 try/catch 只 warn 就继续，
+#      会静默发出一个**正文为空**的 Release（job 依然是绿的）。这比直接失败更危险。
+#      故下面加了「Verify release note exists」步骤主动拦住它。
 #
 # 签名：必须配置仓库 Secrets（SIGNING_KEY / KEY_STORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD）。
 #   ⛔ 刻意不做「缺 Secret 就回退 debug 签名」的兜底：那会静默产出 debug 签名的包，
@@ -18,6 +21,8 @@ name: Release APK
 
 on:
   push:
+    branches:
+      - master
     tags:
       - "v*"
   workflow_dispatch:
@@ -107,7 +112,19 @@ jobs:
       - name: List built APKs
         run: ls -lh build/app/outputs/flutter-apk/*.apk
 
-      # 手动触发（workflow_dispatch）时 github.ref_name 是分支名（如 master），
+      # ⛔ 这一步是为了防「假成功」：body_path 指向的文件缺失时，
+      # softprops/action-gh-release 只 warn 不报错，会静默发出空正文的 Release。
+      - name: Verify release note exists
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          NOTE="release_notes/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$NOTE" ]; then
+            echo "::error::缺少 $NOTE —— 不建 release note 会静默发出空正文的 Release，故此处主动失败"
+            exit 1
+          fi
+          echo "已找到 $NOTE"
+
+      # 手动触发 / 推 master 时 github.ref_name 是分支名（如 master），
       # 不做守卫会建出一个名为 master 的垃圾 Release。故只有 tag 触发才发布。
       - name: Publish to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -121,7 +138,7 @@ jobs:
           files: |
             build/app/outputs/flutter-apk/*.apk
 
-      # 手动触发时把 4 个包留成 workflow artifact，便于下载核验
+      # 推 master / 手动触发时把 4 个包留成 workflow artifact，便于下载核验
       - name: Upload APKs as workflow artifact
         uses: actions/upload-artifact@v4
         with:
