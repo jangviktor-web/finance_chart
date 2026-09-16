@@ -33,18 +33,28 @@ android {
         }
     }
 
-    // 分架构打包：开启后会产出 arm64-v8a / armeabi-v7a / x86_64 三个独立 APK。
+    // 分架构打包：产出 arm64-v8a / armeabi-v7a / x86_64 三个独立 APK。
     //
-    // 开关由 Gradle 属性 split-per-abi 控制（flutter build apk --split-per-abi
-    // 会自动传入 -Psplit-per-abi=true）。CI 用此开关实现「1 通用包 + 3 分架构包 = 4 APK」：
+    // 开关由 Gradle 属性 split-per-abi 控制（`flutter build apk --split-per-abi`
+    // 会自动传入 -Psplit-per-abi=true，见 flutter_tools
+    // lib/src/android/gradle.dart:624 与 FlutterPluginUtils.PROP_SPLIT_PER_ABI）。
+    // CI 用此开关实现「1 通用包 + 3 分架构包 = 4 APK」：
     //   - 第一步 `flutter build apk --release` 不带该属性 → isEnable=false → 仅产通用包；
     //   - 第二步 `--split-per-abi` → isEnable=true → 产 3 个分架构包。
     // 通用包由第一步产出，故此处 universalApk 固定为 false，避免第二步额外再产通用包造成重复。
+    //
+    // ⛔ 不要把 isEnable 改回硬编码 true：本机内存受限，多 ABI 并发构建叠加 R8 会把
+    //    Metaspace 打爆（实测 8m57s 后 `FAILURE: Metaspace`，2026-08-29 记录）。
+    //    本机 `flutter build apk --release` 正是靠「不带 split-per-abi」避开这个坑的。
+    // ⛔ reset() + include(...) 也不能删：AGP 在 splits 打开且未显式收窄时，会为
+    //    全部 ABI（含 x86）出包，那样会多出第 5 个包，偏离「4 个」的目标。
     val enableAbiSplits = project.hasProperty("split-per-abi") &&
             project.property("split-per-abi").toString().toBoolean()
     splits {
         abi {
             isEnable = enableAbiSplits
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = false
         }
     }
