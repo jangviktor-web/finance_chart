@@ -1,19 +1,35 @@
 name: Release APK
 
-# 触发：推送以 v 开头的 tag（如 v1.11.2）即自动构建并发布 Release
+# 触发：
+#   1. 推送以 v 开头的 tag（如 v1.11.3）→ 自动构建并发布 Release
+#   2. 在 Actions 页面手动触发（workflow_dispatch），便于重发/调试
+#
+# 产物：1 个通用包（app-release.apk）+ 3 个分架构包
+#       （arm64-v8a / armeabi-v7a / x86_64），共 4 个 APK 一同发布到同名 GitHub Release。
+#
+# 签名：配置仓库 Secrets（SIGNING_KEY / KEY_STORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD）后
+#       产出正式签名 APK；未配置则回退 debug 签名（不会让本次 release 变红）。
+#       生成 SIGNING_KEY 示例：base64 -w0 your.keystore.jks
+
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 # 创建 Release 需要写权限
 permissions:
   contents: write
 
+concurrency:
+  group: release-apk-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build & Publish Release APK
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,38 +50,65 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # 预拉取 NDK / build-tools 等 Android 构件（Flutter 管理的下载，确保 NDK 版本匹配）
+      # 预拉取 NDK 等 Android 构件（Flutter 管理的下载，确保 NDK 版本匹配 flutter.ndkVersion）
       - name: Precache Android artifacts
         run: flutter precache --android
 
-      # 安装 Android SDK 命令行工具并接受协议
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      # AGP 9.0.1 + compileSdk 35 需要对应平台与构建工具
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      # ⚠️ 不再使用 android-actions/setup-android：该 action 会尝试安装已被
+      # Google 下线的 "tools" 包（sdkmanager "tools"），命中
+      # "Failed to find package 'tools'" → CI 永远失败。
+      # 改为直接用 Flutter 自带的 cmdline-tools/sdkmanager 安装所需构件。
+      - name: Accept licenses & install Android SDK packages
+        run: |
+          SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMGR" --licenses >/dev/null 2>&1 || true
+          "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       # 从 Secrets 还原 keystore 与签名配置（key.properties 已被 .gitignore 忽略）
       - name: Decode keystore & write key.properties
+        if: ${{ secrets.SIGNING_KEY != '' }}
         run: |
-          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > android/app/release-key.jks
+          echo "$SIGNING_KEY" | base64 -d > android/app/release-key.jks
           echo "storeFile=release-key.jks" > android/key.properties
-          echo "storePassword=${{ secrets.KEY_STORE_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+          echo "storePassword=$KEY_STORE_PASSWORD" >> android/key.properties
+          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
           echo "storeType=PKCS12" >> android/key.properties
+          echo "已写入签名配置（密钥内容不回显）"
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Build release APK (R8 开启)
+      # CI 机器内存充裕（~7GB），而本仓库 android/gradle.properties 是为本机
+      # 小页文件 OOM 环境调的（1GB 堆 + 串行 GC + 关守护进程），会让 R8 混淆
+      # 慢 10~30 倍。此处仅覆盖 CI 检出的副本，不影响本地构建。
+      - name: Tune Gradle heap for CI
+        run: |
+          sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError|' android/gradle.properties
+          sed -i 's|^org.gradle.daemon=.*|org.gradle.daemon=true|' android/gradle.properties
+          echo "--- android/gradle.properties (CI override) ---"
+          grep -E "org.gradle.jvmargs|org.gradle.daemon" android/gradle.properties
+
+      # 第一步：不带 --split-per-abi → build.gradle.kts 中 splits.abi.isEnable=false → 仅产通用包
+      - name: Build release APK (universal)
         run: flutter build apk --release
 
-      - name: Rename APK
-        run: mv build/app/outputs/flutter-apk/app-release.apk finance_chart_$GITHUB_REF_NAME.apk
+      # 第二步：--split-per-abi → 传入 -Psplit-per-abi=true → 产 3 个分架构包
+      - name: Build release APK (split per ABI)
+        run: flutter build apk --release --split-per-abi
+
+      - name: List built APKs
+        run: ls -lh build/app/outputs/flutter-apk/*.apk
 
       - name: Publish to GitHub Release
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v2
         with:
-          artifacts: "finance_chart_*.apk"
-          token: ${{ github.token }}
           name: ${{ github.ref_name }}
-          generateReleaseNotes: true
+          tag_name: ${{ github.ref_name }}
+          # 动态引用与 tag 同名的 release note（release_notes/vX.Y.Z.md）
+          body_path: release_notes/${{ github.ref_name }}.md
+          fail_on_unmatched_files: false
+          files: |
+            build/app/outputs/flutter-apk/*.apk

@@ -33,17 +33,19 @@ android {
         }
     }
 
-    // 分架构打包：开启后会产出 arm64-v8a / armeabi-v7a / x86_64 三个独立 APK
-    // 外加一份全架构通用包，便于"按机型分发更小的包"。
+    // 分架构打包：开启后会产出 arm64-v8a / armeabi-v7a / x86_64 三个独立 APK。
     //
-    // ⚠️ 当前关闭原因：本机开启 splits 后，多 ABI 并发构建叠加 R8 会把
-    // Metaspace 打爆（实测 8m57s 后 `FAILURE: Metaspace` OOM，见 2026-08-29 记录）。
-    // R8 混淆对发布质量（包体 + 防反编译）的价值远高于分架构瘦身，
-    // 故保留 R8、关闭 splits，只产全架构通用包。
-    // 若将来换到内存充裕的机器/CI，把 isEnable 改回 true 即可。
+    // 开关由 Gradle 属性 split-per-abi 控制（flutter build apk --split-per-abi
+    // 会自动传入 -Psplit-per-abi=true）。CI 用此开关实现「1 通用包 + 3 分架构包 = 4 APK」：
+    //   - 第一步 `flutter build apk --release` 不带该属性 → isEnable=false → 仅产通用包；
+    //   - 第二步 `--split-per-abi` → isEnable=true → 产 3 个分架构包。
+    // 通用包由第一步产出，故此处 universalApk 固定为 false，避免第二步额外再产通用包造成重复。
+    val enableAbiSplits = project.hasProperty("split-per-abi") &&
+            project.property("split-per-abi").toString().toBoolean()
     splits {
         abi {
-            isEnable = false
+            isEnable = enableAbiSplits
+            isUniversalApk = false
         }
     }
 
