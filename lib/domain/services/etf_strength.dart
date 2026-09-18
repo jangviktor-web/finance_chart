@@ -91,8 +91,11 @@ class EtfRotation {
       }
 
       final std = _populationStd(dailyReturns);
-      // std≈0 时 riskAdjRaw 取 0，防止除以极小值爆炸
-      final riskAdjRaw = std < 1e-6 ? 0.0 : cumulativeReturn / std;
+      // 零波动 = 最稳 = 最高风险调整收益：置 ±1e6 极值（避免 Inf/NaN，方向正确）。
+      // 用 1e-9 阈值，避开「每日 +1 元」这类极小但非 0 的 std。
+      final riskAdjRaw = std < 1e-9
+          ? (cumulativeReturn >= 0 ? 1e6 : -1e6)
+          : cumulativeReturn / std;
 
       final upDays = dailyReturns.where((r) => r > 0).length;
       final b = upDays / window * 100;
@@ -125,7 +128,8 @@ class EtfRotation {
         e.a = (50 + 10 * z).clamp(0.0, 100.0).toDouble();
       }
 
-      // 规则 2：累计收益处于池内前 10%（分位 ≥ 90）→ 剔除（池子 < 10 只跳过）
+      // 规则 2：累计收益处于池内前 10%（分位 ≥ 90，即 (rank-1)/(n-1) ≥ 0.90）→ 剔除。
+      //         池子 < 10 只跳过此规则，避免误剔（口径以累计收益降序取前 ceil(n*0.1) 名）。
       if (valid.length >= 10) {
         final sortedDesc = [...valid]
           ..sort((x, y) => y.cumulativeReturn.compareTo(x.cumulativeReturn));

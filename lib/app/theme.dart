@@ -49,6 +49,10 @@ class AppColors {
   // ── 不随主题变的固定色 ──
   static const primary = Color(0xFF3b82f6);
 
+  // 排名徽标强调色（固定，不随主题变）
+  static const rank2 = Color(0xFFFF6D00);
+  static const rank3 = Color(0xFFFFA000);
+
   // MA 均线颜色
   static const ma5 = Color(0xFFf59e0b);
   static const ma10 = Color(0xFF8b5cf6);

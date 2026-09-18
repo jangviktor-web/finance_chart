@@ -115,4 +115,26 @@ void main() {
     final results = EtfRotation.rank(inputs, window: 5);
     expect(results.every((r) => !r.disqualified), isTrue);
   });
+
+  // ── 回归：零波动方向正确性（验证者指出的测试盲区）──
+  // 旧守卫 std<1e-6 把「零波动平稳上涨」的 riskAdjRaw 强制置 0（最低），方向反了。
+  // 修正后：零波动 = 最稳 = 最高风险调整收益。
+  test('零波动平稳上涨 的 A 分量高于 同累计收益但大起大落', () {
+    // X：恒定 10% 上涨 → 日收益 std 恰好为 0
+    final x = _input('X', [100, 110, 121, 133.1, 146.41, 161.051]);
+    // Y：与 X 同累计收益(≈0.61051)，但前两段大开大合、末段温和（含一个 +94% 收尾）
+    final y = _input('Y', [100, 200, 80, 82, 83, 161.051]);
+
+    final results = EtfRotation.rank([x, y], window: 5);
+    final rx = results.firstWhere((r) => r.code == 'X');
+    final ry = results.firstWhere((r) => r.code == 'Y');
+
+    // 两者均未剔除（避免被规则干扰）
+    expect(rx.disqualified, isFalse);
+    expect(ry.disqualified, isFalse);
+    // 零波动的 X 风险调整收益分量高于大起大落的 Y（稳者更高）
+    expect(rx.a, greaterThan(ry.a));
+    // 总分也更高
+    expect(rx.score, greaterThan(ry.score));
+  });
 }

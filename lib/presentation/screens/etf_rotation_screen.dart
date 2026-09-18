@@ -265,8 +265,8 @@ class _EtfRotationScreenState extends State<EtfRotationScreen> {
   Color _rankAccent(int rank) {
     switch (rank) {
       case 1: return AppColors.up;
-      case 2: return const Color(0xFFFF6D00);
-      case 3: return const Color(0xFFFFA000);
+      case 2: return AppColors.rank2;
+      case 3: return AppColors.rank3;
       default: return AppColors.textSecondary;
     }
   }
