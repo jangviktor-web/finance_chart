@@ -17,6 +17,7 @@ import 'fund_flow_screen.dart';
 import 'comparable_company_screen.dart';
 import 'smart_screener_screen.dart';
 import 'fund_module_screen.dart';
+import 'etf_rotation_screen.dart';
 import '../../data/datasources/search_api.dart';
 import '../../data/datasources/sentiment_api.dart';
 import '../../data/datasources/em_ai_api.dart';
@@ -596,6 +597,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       if (settings.enableScan)
         ('选股扫描', Icons.radar, AppColors.warning, () => const ScanScreen()),
       ('多股对比', Icons.compare_arrows, AppColors.ma10, () => const CompareScreen()),
+      ('ETF 轮动', Icons.swap_horiz, AppColors.ma20, () => const EtfRotationScreen()),
       ('资金流向', Icons.account_balance, AppColors.ma60, () => const FundFlowScreen()),
       if (settings.enableAi)
         ('AI 助手', Icons.smart_toy, AppColors.primary, () => const AiChatScreen()),
