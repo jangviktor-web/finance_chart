@@ -104,10 +104,16 @@ class KlineNotifier extends StateNotifier<MarketState> {
       final repo = _ref.read(marketRepositoryProvider);
       final params = _ref.read(indicatorParamsProvider);
 
-      final realtimeFuture = repo.getRealtime(code);
+      // 行情只喂标题/涨跌幅，K 线才是这张图的主体 —— 两者必须解耦，否则任一行情源
+      // 抖动都会让**全 app 每一张** K 线图都报「加载失败」（行情先 await，它一抛就整个 load 挂）。
+      // ⚠️ onError 必须在这里立刻挂上：否则 future 先于 await 失败会变成未捕获异常。
+      final realtimeFuture = repo
+          .getRealtime(code)
+          .then<RealtimeQuote?>((q) => q, onError: (_) => null);
       final klineFuture = repo.getKline(code: code, period: period, count: count, forceRefresh: forceRefresh);
 
-      final quote = await realtimeFuture;
+      // 行情拿不到就沿用旧值（首帧为空），K 线照常渲染
+      final quote = (await realtimeFuture) ?? state.quote;
       final klines = await klineFuture;
       // P0-3: 指标计算移入后台 isolate，避免主线程卡顿
       final indicators = await compute(
