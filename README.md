@@ -37,25 +37,26 @@
 
 <div align="center">
 
-[![📦 通用版 APK](https://img.shields.io/badge/📦%20通用版-安卓安装包‑3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.3/app-release.apk)
+[![📦 通用版 APK](https://img.shields.io/badge/📦%20通用版-安卓安装包‑3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.5/app-release.apk)
 &nbsp;
-[![📦 arm64‑v8a APK](https://img.shields.io/badge/📦%20arm64‑v8a-安卓安装包‑0284CC?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.3/app-arm64-v8a-release.apk)
+[![📦 arm64‑v8a APK](https://img.shields.io/badge/📦%20arm64‑v8a-安卓安装包‑0284CC?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.5/app-arm64-v8a-release.apk)
 &nbsp;
-[![📦 armeabi‑v7a APK](https://img.shields.io/badge/📦%20armeabi‑v7a-安卓安装包‑9C27B0?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.3/app-armeabi-v7a-release.apk)
+[![📦 armeabi‑v7a APK](https://img.shields.io/badge/📦%20armeabi‑v7a-安卓安装包‑9C27B0?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.5/app-armeabi-v7a-release.apk)
 &nbsp;
-[![📦 x86_64(虚拟机)](https://img.shields.io/badge/📦%20x86_64(虚拟机)-安卓安装包‑1565C0?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.3/app-x86_64-release.apk)
+[![📦 x86_64(虚拟机)](https://img.shields.io/badge/📦%20x86_64(虚拟机)-安卓安装包‑1565C0?style=for-the-badge&logo=android&logoColor=white)](https://ghproxy.net/https://github.com/jangviktor-web/finance_chart/releases/download/v1.11.5/app-x86_64-release.apk)
 
 </div>
 
 | 安装包 | 大小 | 适用说明 |
 |---|---|---|
-| 通用版 `app-release.apk` | 67.3MB | 全 CPU 架构，拿不准就选这个 |
+| 通用版 `app-release.apk` | 67.4MB | 全 CPU 架构，拿不准就选这个 |
 | `app-arm64-v8a-release.apk` | 23.3MB | 现代 64 位机型（2016 年后绝大多数手机） |
 | `app-armeabi-v7a-release.apk` | 21.7MB | 老款 32 位机型 |
 | `app-x86_64-release.apk` | 24.6MB | 模拟器 / x86 平板 |
 
 | 版本 | 日期 | 更新内容 |
 |:---:|:---:|---|
+| **v1.11.5** | 2026-09-18 | 🆕 **ETF 轮动整体调校**：池子重筛 33 只 · 算分更准 · 入选更严 · 空仓更早提醒 · 盘中丢未走完走势<br>🔧 **修护**：全站 K 线图"加载失败" ｜ ETF 名字显示成代码 ｜ ETF 列表点不动 |
 | **v1.11.3** | 2026-09-16 | 🆕 **新增数据源**：东财镜像域（datacenter / push2delay）· 东财 F10 财务报表（**免 Key**）· 腾讯龙虎榜（**免 Key**）<br>🔧 **模块更新**：多源降级升级为端点级熔断 ｜ 个股详情页打通（财务三表 · 财务指标 · 集合竞价 · 股东 · 大宗交易 · 限售解禁 · 5 维评分雷达）｜ 港美股代码修复 ｜ 北交所 / 沪基金代码修正<br>📦 **打包**：改为 1 通用包 + 3 分架构包，共 4 个 APK 供按机型选择 |
 | **v1.11.2** | 2026-08-29 | GitHub Actions 自动构建发布 · 单包 APK · 纯 BYOK · 深浅色主题修复 |
 | **v1.11.1** | 2026-08-28 | 修复深浅色模式字体不随主题切换 · after-dispose 守卫 |
@@ -74,7 +75,7 @@
 >
 > 完整版本列表见 [Releases](https://github.com/jangviktor-web/finance_chart/releases) · 变更详情见 [CHANGELOG](CHANGELOG.md)
 >
-> **升级提示**：从 **v1.11.2** 升级 → 直接安装即可，**无需卸载**。从 **v1.11.1 及更早**版本升级 → 请**先卸载旧版再安装**（旧版与本版无法直接覆盖）。卸载会清除 App 本机数据（含已填写的同花顺 Key 等本地配置），重装后到「设置」重新填写即可。
+> **升级提示**：从 **v1.11.3** 升级 → 直接安装即可，**无需卸载**。从 **v1.11.2 及更早**版本升级 → 请**先卸载旧版再安装**（旧版与本版无法直接覆盖）。卸载会清除 App 本机数据（含已填写的同花顺 Key 等本地配置），重装后到「设置」重新填写即可。
 
 ---
 
@@ -302,6 +303,7 @@ build/app/outputs/flutter-apk/app-release.apk   # 通用包（CI 已重命名为
 
 | 版本 | 日期 | 更新 |
 |---|---|---|
+| v1.11.5 | 2026-09-18 | ETF 轮动调校 + 多项修护（K 线图加载失败 / ETF 名字 / 列表点按） |
 | v1.11.2 | 2026-08-29 | GitHub Actions 自动构建发布 · 单包 APK · 纯 BYOK · 深浅色主题修复 |
 | v1.11.1 | 2026-08-28 | 修复深浅色模式字体不随主题切换 · after-dispose 守卫 |
 | v1.11.0 | 2026-08-27 | 同花顺(THS) 热度中心 · 估值快照 · THS 情绪容灾 |
